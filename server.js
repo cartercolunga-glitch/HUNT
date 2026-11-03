@@ -41,7 +41,7 @@ const server=http.createServer(async (req,res)=>{
       if(action[2]==='location'){if(b.playerId&&b.latitude!=null&&b.longitude!=null)game.locations[b.playerId]={latitude:b.latitude,longitude:b.longitude,accuracy:b.accuracy||null,updatedAt:Date.now()}}
       if(action[2]==='chat'&&b.playerId&&b.text){const p=game.players.find(x=>x.id===b.playerId);game.messages.push({id:id(),playerId:b.playerId,name:p?.name||'Player',text:String(b.text).slice(0,240),createdAt:Date.now()});game.messages=game.messages.slice(-100)}
       if(action[2]==='zone'&&b.zone)game.zone=b.zone;
-      if(action[2]==='config'){if(b.hostId!==game.hostId)return send(res,403,{error:'Only the host can change settings'});if(b.duration)game.duration=String(b.duration);if(b.mode)game.mode=String(b.mode);const allowed=['tagRange','headStart','pingInterval','maxPlayers','locationPrecision','connectionMode','chatEnabled','autoEnd'];for(const key of allowed)if(b[key]!==undefined)game.rules[key]=key==='maxPlayers'?Math.max(game.players.length,Math.min(100,Number(b[key]))):b[key]}
+      if(action[2]==='config'){if(b.hostId!==game.hostId)return send(res,403,{error:'Only the host can change settings'});if(b.duration)game.duration=String(b.duration);if(b.mode)game.mode=String(b.mode);const allowed=['tagRange','headStart','pingInterval','maxPlayers','locationPrecision','connectionMode','seekerMethod','caughtBehavior','playerRole','scheduleStart','chatEnabled','autoEnd'];for(const key of allowed)if(b[key]!==undefined)game.rules[key]=key==='maxPlayers'?Math.max(game.players.length,Math.min(100,Number(b[key]))):b[key]}
       if(action[2]==='stop')game.status='complete';return send(res,200,{game:safe(game)})
     }
     if(req.method==='GET'){

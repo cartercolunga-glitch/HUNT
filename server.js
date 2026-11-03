@@ -34,6 +34,7 @@ const server=http.createServer(async (req,res)=>{
     const action=url.pathname.match(/^\/api\/games\/([^/]+)\/(start|ping|tag|stop|location|chat|zone|config)$/);
     if(action&&req.method==='POST'){
       const game=getGame(req);if(!game)return send(res,404,{error:'Game not found'});const b=await body(req);
+      if(['start','ping','stop','zone','config'].includes(action[2])&&b.hostId!==game.hostId)return send(res,403,{error:'Only the host can control this game'});
       if(action[2]==='start'){game.status='live';game.startedAt=Date.now()}
       if(action[2]==='ping'){game.pingWave+=1;game.lastPingAt=Date.now()}
       if(action[2]==='tag'){const p=game.players.find(x=>x.id===b.playerId);if(p){p.status='tagged';p.taggedAt=Date.now()}}

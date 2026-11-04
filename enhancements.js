@@ -61,7 +61,7 @@
     mapEl.className=hunter?'hunter-live-map':'shared-live-map';
     const center=zoneCenter(g.zone)||[40.2338,-111.6585];
     if(window.L&&!liveMap){liveMap=L.map(mapEl,{zoomControl:true}).setView(center,15);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(liveMap);liveLayer=L.layerGroup().addTo(liveMap);drawLiveBoundary(g.zone)}else if(liveMap&&!liveBoundary)drawLiveBoundary(g.zone);
-    const points=hunter?{...(g.pingSnapshot||{}),...(g.locations?.[me.id]?{[me.id]:g.locations[me.id]}:{})}:g.locations||{};const entries=Object.entries(points);const waiting=mapEl.querySelector('.waiting-ping');if(waiting)waiting.style.display=entries.length>1?'none':'grid';
+    const points=hunter?{...(g.pingSnapshot||{}),...(g.locations?.[me.id]?{[me.id]:g.locations[me.id]}:{})}:g.locations||{};const entries=Object.entries(points);const waiting=mapEl.querySelector('.waiting-ping');if(waiting)waiting.style.display=entries.length?'none':'grid';
     if(!hunter||g.pingWave!==lastPing){if(hunter)lastPing=g.pingWave;if(liveLayer){liveLayer.clearLayers();const byId=Object.fromEntries(g.players.map(p=>[p.id,p]));entries.forEach(([id,p])=>{const person=byId[id];const color=person?.status==='tagged'?'#ff3b30':person?.role==='HUNTER'?'#ff9f43':'#38a8ff';L.circleMarker([p.latitude,p.longitude],{radius:10,color,fillColor:color,fillOpacity:.95,weight:3}).bindTooltip(person?.status==='tagged'?'Caught runner':person?.name||'Player').addTo(liveLayer)});if(!liveBoundary&&entries.length)liveMap.fitBounds(entries.map(([,p])=>[p.latitude,p.longitude]),{padding:[35,35],maxZoom:16})}}
     setTimeout(()=>liveMap?.invalidateSize(),80);
   }

@@ -45,7 +45,7 @@ const server=http.createServer(async (req,res)=>{
       if(action[2]==='stop')game.status='complete';return send(res,200,{game:safe(game)})
     }
     if(req.method==='GET'){
-      const file=url.pathname==='/'?'/index.html':url.pathname;const full=path.join(ROOT,path.normalize(file));if(!full.startsWith(ROOT))return send(res,403,{error:'Forbidden'});fs.readFile(full,(e,data)=>{if(e)return send(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':mime[path.extname(full)]||'application/octet-stream'});res.end(data)})
+      const file=url.pathname==='/'?'/index.html':url.pathname;const full=path.join(ROOT,path.normalize(file));if(!full.startsWith(ROOT))return send(res,403,{error:'Forbidden'});if(url.pathname==='/hunt-forest-bg.jpg'){fs.readFile(path.join(ROOT,'hunt-forest-bg.b64'),'utf8',(e,encoded)=>{if(e)return send(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':'image/jpeg','Cache-Control':'public, max-age=31536000'});res.end(Buffer.from(encoded.trim(),'base64'))});return}fs.readFile(full,(e,data)=>{if(e)return send(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':mime[path.extname(full)]||'application/octet-stream'});res.end(data)})
       return
     }
     send(res,404,{error:'Not found'})

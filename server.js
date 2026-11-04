@@ -24,24 +24,25 @@ const server=http.createServer(async (req,res)=>{
   try{
     if(url.pathname==='/api/games'&&req.method==='POST'){
       const b=await body(req);let gameCode=code();while(games.has(gameCode))gameCode=code();
-      const host={id:id(),name:b.hostName||'Host',role:'HUNTER',status:'ready',locationShared:false};
-      const game={code:gameCode,name:b.name||'Outdoor Hunt',area:b.area||'Agreed play area',duration:b.duration||'45 minutes',mode:b.mode||'Classic',status:'lobby',pingWave:0,createdAt:Date.now(),startedAt:null,players:[host],hostId:host.id,zone:b.zone||{type:'circle',radius:500},rules:{tagRange:b.tagRange||'1 m',headStart:b.headStart||'2 minutes',pingInterval:b.pingInterval||'5 minutes',maxPlayers:Number(b.maxPlayers)||20,locationPrecision:b.locationPrecision||'Approximate',connectionMode:b.connectionMode||'internet',chatEnabled:b.chatEnabled!==false,autoEnd:b.autoEnd!==false},messages:[],locations:{}};games.set(gameCode,game);return send(res,201,{game:safe(game),playerId:host.id})
+      const host={id:id(),name:b.hostName||'Host',role:'UNASSIGNED',ready:false,status:'waiting',locationShared:false};
+      const game={code:gameCode,name:b.name||'Outdoor Hunt',area:b.area||'Agreed play area',duration:b.duration||'45 minutes',mode:b.mode||'Classic',status:'lobby',pingWave:0,createdAt:Date.now(),startedAt:null,players:[host],hostId:host.id,zone:b.zone||{type:'circle',radius:500},rules:{tagRange:b.tagRange||'1 m',headStart:b.headStart||'2 minutes',pingInterval:b.pingInterval||'5 minutes',maxPlayers:Number(b.maxPlayers)||20,hunterCount:Math.max(1,Number(b.hunterCount)||1),locationPrecision:b.locationPrecision||'Approximate',connectionMode:b.connectionMode||'internet',chatEnabled:b.chatEnabled!==false,autoEnd:b.autoEnd!==false},messages:[],locations:{}};games.set(gameCode,game);return send(res,201,{game:safe(game),playerId:host.id})
     }
     if(url.pathname.match(/^\/api\/games\/[^/]+\/join$/)&&req.method==='POST'){
-      const game=getGame(req);if(!game)return send(res,404,{error:'Game not found'});if(game.players.length>=game.rules.maxPlayers)return send(res,409,{error:'This game is full'});const b=await body(req);const player={id:id(),name:b.name||'Player',role:game.players.filter(p=>p.role==='RUNNER').length<game.players.filter(p=>p.role==='HUNTER').length?'RUNNER':'HUNTER',status:'ready',locationShared:false};game.players.push(player);return send(res,201,{game:safe(game),playerId:player.id})
+      const game=getGame(req);if(!game)return send(res,404,{error:'Game not found'});if(game.players.length>=game.rules.maxPlayers)return send(res,409,{error:'This game is full'});const b=await body(req);const player={id:id(),name:b.name||'Player',role:'UNASSIGNED',ready:false,status:'waiting',locationShared:false};game.players.push(player);return send(res,201,{game:safe(game),playerId:player.id})
     }
     if(url.pathname.match(/^\/api\/games\/[^/]+$/)&&req.method==='GET'){const game=getGame(req);return game?send(res,200,{game:safe(game)}):send(res,404,{error:'Game not found'})}
-    const action=url.pathname.match(/^\/api\/games\/([^/]+)\/(start|ping|tag|stop|location|chat|zone|config)$/);
+    const action=url.pathname.match(/^\/api\/games\/([^/]+)\/(start|ready|ping|tag|stop|location|chat|zone|config)$/);
     if(action&&req.method==='POST'){
       const game=getGame(req);if(!game)return send(res,404,{error:'Game not found'});const b=await body(req);
       if(['start','ping','stop','zone','config'].includes(action[2])&&b.hostId!==game.hostId)return send(res,403,{error:'Only the host can control this game'});
-      if(action[2]==='start'){game.status='live';game.startedAt=Date.now()}
+      if(action[2]==='ready'){const p=game.players.find(x=>x.id===b.playerId);if(!p)return send(res,404,{error:'Player not found'});p.ready=b.ready!==false;p.status=p.ready?'ready':'waiting'}
+      if(action[2]==='start'){if(game.players.length<2)return send(res,409,{error:'At least two players are required'});if(!game.players.every(p=>p.ready))return send(res,409,{error:'Everyone must tap Ready first'});const shuffled=[...game.players].sort(()=>Math.random()-0.5);const hunterCount=Math.max(1,Math.min(game.players.length-1,Number(game.rules.hunterCount)||1));game.players.forEach(p=>{p.role='RUNNER'});shuffled.slice(0,hunterCount).forEach(p=>{p.role='HUNTER'});game.status='live';game.startedAt=Date.now()}
       if(action[2]==='ping'){game.pingWave+=1;game.lastPingAt=Date.now()}
       if(action[2]==='tag'){const p=game.players.find(x=>x.id===b.playerId);if(p){p.status='tagged';p.taggedAt=Date.now()}}
       if(action[2]==='location'){if(b.playerId&&b.latitude!=null&&b.longitude!=null)game.locations[b.playerId]={latitude:b.latitude,longitude:b.longitude,accuracy:b.accuracy||null,updatedAt:Date.now()}}
       if(action[2]==='chat'&&b.playerId&&b.text){const p=game.players.find(x=>x.id===b.playerId);game.messages.push({id:id(),playerId:b.playerId,name:p?.name||'Player',text:String(b.text).slice(0,240),createdAt:Date.now()});game.messages=game.messages.slice(-100)}
       if(action[2]==='zone'&&b.zone)game.zone=b.zone;
-      if(action[2]==='config'){if(b.hostId!==game.hostId)return send(res,403,{error:'Only the host can change settings'});if(b.duration)game.duration=String(b.duration);if(b.mode)game.mode=String(b.mode);const allowed=['tagRange','headStart','pingInterval','maxPlayers','locationPrecision','connectionMode','seekerMethod','caughtBehavior','playerRole','scheduleStart','chatEnabled','autoEnd'];for(const key of allowed)if(b[key]!==undefined)game.rules[key]=key==='maxPlayers'?Math.max(game.players.length,Math.min(100,Number(b[key]))):b[key]}
+      if(action[2]==='config'){if(b.hostId!==game.hostId)return send(res,403,{error:'Only the host can change settings'});if(b.duration)game.duration=String(b.duration);if(b.mode)game.mode=String(b.mode);const allowed=['tagRange','headStart','pingInterval','maxPlayers','hunterCount','locationPrecision','connectionMode','seekerMethod','caughtBehavior','playerRole','scheduleStart','chatEnabled','autoEnd'];for(const key of allowed)if(b[key]!==undefined)game.rules[key]=key==='maxPlayers'?Math.max(game.players.length,Math.min(100,Number(b[key]))):key==='hunterCount'?Math.max(1,Math.min(50,Number(b[key]))):b[key]}
       if(action[2]==='stop')game.status='complete';return send(res,200,{game:safe(game)})
     }
     if(req.method==='GET'){
@@ -52,4 +53,5 @@ const server=http.createServer(async (req,res)=>{
   }catch(e){send(res,500,{error:e.message})}
 });
 server.listen(PORT,'0.0.0.0',()=>console.log(`HUNT server running at http://localhost:${PORT}`));
+
 

@@ -9,6 +9,7 @@
     .map-fullscreen .map-close{display:block}
     .ready-action{width:100%;margin-top:12px}
     .mode-description{display:block;color:var(--muted);font-size:11px;line-height:1.35;margin-top:6px}
+    .hunter-picker{grid-column:1/-1;padding:12px;border:1px solid #ff9f4344;border-radius:12px;background:#ff9f430b}.hunter-picker>label{display:block;color:var(--orange);font-size:11px;font-weight:900;letter-spacing:.08em;margin-bottom:8px}.hunter-options{display:grid;gap:7px}.hunter-option{display:flex!important;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;background:#101a24;color:var(--ink)!important;font-size:13px!important;font-weight:600!important;margin:0!important}.hunter-option input{accent-color:var(--orange)}.hunter-help{display:block;color:var(--muted);font-size:11px;margin-top:8px}
     .hunter-live-map{height:260px;border-radius:15px;border:1px solid #55733e;overflow:hidden;background:#142118;position:relative;margin:18px 0}
     .hunter-live-map .ping-label{position:absolute;z-index:500;left:12px;top:11px;padding:6px 9px;border-radius:999px;background:#071018dd;color:var(--lime);font-size:10px;font-weight:900;letter-spacing:.1em}
     .hunter-live-map .waiting-ping{position:absolute;inset:0;display:grid;place-items:center;color:#c7f36b99;font-size:11px;font-weight:900;letter-spacing:.1em;pointer-events:none}
@@ -68,9 +69,19 @@
   }
   function wireHunterSetting(isHost){
     const card=document.querySelector('#adminCard');if(!card||!isHost)return;
+    const grid=card.querySelector('.admingrid');if(!grid)return;
     let field=document.querySelector('#adminHunterCount');
-    if(!field){const wrap=document.createElement('div');wrap.className='adminfield';wrap.innerHTML='<label>NUMBER OF HUNTERS</label><select id="adminHunterCount"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>';const grid=card.querySelector('.admingrid');const max=grid?.querySelector('#adminMax')?.closest('.adminfield');if(max)max.before(wrap);else grid?.prepend(wrap);field=wrap.querySelector('select');field.onchange=async()=>{try{await api('/api/games/'+code()+'/config',{method:'POST',body:JSON.stringify({hostId:player(),hunterCount:Number(field.value)})});window.toast?.('Hunter count saved')}catch(e){window.toast?.(e.message)}}}
+    if(!field){const wrap=document.createElement('div');wrap.className='adminfield';wrap.innerHTML='<label>NUMBER OF HUNTERS</label><select id="adminHunterCount"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>';const max=grid.querySelector('#adminMax')?.closest('.adminfield');if(max)max.before(wrap);else grid.prepend(wrap);field=wrap.querySelector('select');field.onchange=async()=>{try{await api('/api/games/'+code()+'/config',{method:'POST',body:JSON.stringify({hostId:player(),hunterCount:Number(field.value)})});window.toast?.('Hunter count saved')}catch(e){window.toast?.(e.message)}}}
     if(field&&latest?.rules?.hunterCount)field.value=String(latest.rules.hunterCount);
+    let mode=document.querySelector('#adminHunterSelection');
+    if(!mode){const wrap=document.createElement('div');wrap.className='adminfield';wrap.innerHTML='<label>HUNTER SELECTION</label><select id="adminHunterSelection"><option value="random">Randomly choose hunters</option><option value="admin">Admin chooses hunters</option></select>';grid.prepend(wrap);mode=wrap.querySelector('select');mode.onchange=async()=>{try{await api('/api/games/'+code()+'/config',{method:'POST',body:JSON.stringify({hostId:player(),hunterSelection:mode.value,hunterIds:[]})});render(latest);window.toast?.(mode.value==='admin'?'Choose your hunters below':'Hunters will be selected randomly')}catch(e){window.toast?.(e.message)}}}
+    mode.value=latest?.rules?.hunterSelection==='admin'?'admin':'random';
+    let picker=document.querySelector('#hunterPicker');
+    if(!picker){picker=document.createElement('div');picker.id='hunterPicker';picker.className='hunter-picker';mode.closest('.adminfield').after(picker)}
+    const adminMode=mode.value==='admin';picker.style.display=adminMode?'block':'none';
+    if(adminMode){const count=Number(latest?.rules?.hunterCount)||1;const selected=new Set(latest?.rules?.hunterIds||[]);picker.innerHTML='<label>SELECT '+count+' HUNTER'+(count===1?'':'S')+'</label><div class="hunter-options">'+latest.players.map(p=>'<label class="hunter-option"><input type="checkbox" value="'+esc(p.id)+'" '+(selected.has(p.id)?'checked':'')+'><span>'+esc(p.name)+'</span></label>').join('')+'</div><small class="hunter-help">Select exactly '+count+' player'+(count===1?'':'s')+' before starting.</small>';
+      picker.querySelectorAll('input').forEach(input=>input.onchange=async()=>{const ids=[...picker.querySelectorAll('input:checked')].map(x=>x.value);try{await api('/api/games/'+code()+'/config',{method:'POST',body:JSON.stringify({hostId:player(),hunterIds:ids})});window.toast?.(ids.length===count?'Hunter lineup saved':`Select ${count} hunter${count===1?'':'s'}`)}catch(e){window.toast?.(e.message)}})
+    }
   }
   function render(g){
     latest=g;wireReady();wireModeDescriptions();const id=player(),isHost=id===g.hostId,allReady=g.players.length>=2&&g.players.every(p=>p.ready);

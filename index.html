@@ -27,6 +27,7 @@
 
   <section id="create" class="card hidden">
     <button class="back" data-screen="home">← Back</button><h2 style="margin-top:18px">Create a game</h2><div class="sub">Set the basics. You can change the details before starting.</div>
+    <div class="field"><label>YOUR NAME</label><input id="hostName" value="" placeholder="Enter your name" autocomplete="name" /></div>
     <div class="field"><label>GAME NAME</label><input id="gameName" value="" placeholder="Name your game" /></div>
     <div class="row"><div class="field"><label>PLAYERS</label><select id="playerCount"><option>4–8</option><option>9–16</option><option>17–30</option></select></div><div class="field"><label>TIME LIMIT</label><select id="duration"><option>5 minutes</option><option>10 minutes</option><option>15 minutes</option><option>30 minutes</option><option selected>45 minutes</option><option>60 minutes</option><option>90 minutes</option></select></div></div>
     <div class="field"><label>PLAY AREA</label><input id="area" value="Riverside Park — north field" /></div>
@@ -34,8 +35,8 @@
   </section>
 
   <section id="join" class="card hidden">
-    <button class="back" data-screen="home">← Back</button><h2 style="margin-top:18px">Join a game</h2><div class="sub">Ask the host for the six-character game code.</div>
-    <div class="field"><label>GAME CODE</label><input id="joinCode" maxlength="6" placeholder="e.g. R4K2M8" style="text-transform:uppercase;letter-spacing:.14em" /></div>
+    <button class="back" data-screen="home">← Back</button><h2 style="margin-top:18px">Join a game</h2><div class="sub">Ask the host for the four-digit game code.</div>
+    <div class="field"><label>GAME CODE</label><input id="joinCode" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" placeholder="e.g. 4827" style="letter-spacing:.14em" /></div>
     <div class="field"><label>YOUR NAME</label><input id="joinName" placeholder="Trail name or first name" /></div>
     <button class="btn" style="width:100%;margin-top:20px" id="joinBtn">Enter lobby</button>
   </section>
@@ -100,7 +101,7 @@ if(location.protocol.startsWith('http')){
 function paintOnline(g){onlineCode=g.code;onlineHostId=g.hostId;document.getElementById('lobbyCode').textContent=g.code;document.getElementById('lobbyTitle').textContent=g.name;document.getElementById('lobbyArea').textContent=g.area+' · '+g.duration+' · '+g.mode;const list=document.querySelector('.players');if(list)list.innerHTML=g.players.map(p=>'<div class="player"><div>'+p.name+'<small>'+p.status+' · location '+(p.locationShared?'on':'off')+'</small></div><span class="role">'+p.role+'</span></div>').join('');const count=document.querySelector('#lobby h2');if(count)count.innerHTML='Players <span style="color:var(--muted);font-weight:500">· '+g.players.length+' connected</span>';const isHost=onlinePlayer===g.hostId;const admin=document.querySelector('#adminCard');if(admin)admin.style.display=isHost?'block':'none';const mapCard=document.querySelector('#mapCard');if(mapCard)mapCard.style.display=isHost?'block':'none';const video=document.querySelector('#videoRules');if(video)video.style.display=isHost?'block':'none';const toolbar=document.querySelector('.toolbar');if(toolbar)toolbar.style.display=isHost?'block':'none';const start=document.querySelector('#startBtn');if(start)start.style.display=isHost&&g.status==='lobby'?'block':'none';if(g.messages){const log=document.querySelector('#chatlog');if(log)log.innerHTML=g.messages.map(m=>'<div class="chatmsg"><b>'+m.name.replace(/[<>]/g,'')+'</b> '+m.text.replace(/[<>]/g,'')+'</div>').join('')||'<div class="chatmsg"><b>HUNT</b> No messages yet.</div>'}if(g.pingWave){const note=document.querySelector('#game .notice');if(note)note.innerHTML='<b>Ping wave '+String(g.pingWave).padStart(2,'0')+' sent</b><br>Runner positions were revealed briefly. Stay aware and move safely.'}if(g.status==='live')show('game');if(g.status==='complete')show('results')}
   async function sync(){if(!onlineCode)return;try{const r=await api('/api/games/'+onlineCode);paintOnline(r.game)}catch(e){toast('Connection lost · retrying…')}}
   function beginPoll(){clearInterval(poller);poller=setInterval(sync,2000);sync()}
-  document.getElementById('createBtn').onclick=async()=>{try{const r=await api('/api/games',{method:'POST',body:JSON.stringify({name:document.getElementById('gameName').value,area:document.getElementById('area').value,duration:document.getElementById('duration').value,mode:document.getElementById('mode')?.value,hostName:'Host'})});onlineCode=r.game.code;onlinePlayer=r.playerId;sessionStorage.setItem('hunt-code',onlineCode);sessionStorage.setItem('hunt-player',onlinePlayer);paintOnline(r.game);show('lobby');beginPoll()}catch(e){toast(e.message)}};
+  document.getElementById('createBtn').onclick=async()=>{const hostName=document.getElementById('hostName').value.trim();if(!hostName){toast('Enter your name before creating the lobby');return}try{const r=await api('/api/games',{method:'POST',body:JSON.stringify({name:document.getElementById('gameName').value,area:document.getElementById('area').value,duration:document.getElementById('duration').value,mode:document.getElementById('mode')?.value,hostName:hostName})});onlineCode=r.game.code;onlinePlayer=r.playerId;sessionStorage.setItem('hunt-code',onlineCode);sessionStorage.setItem('hunt-player',onlinePlayer);paintOnline(r.game);show('lobby');beginPoll()}catch(e){toast(e.message)}};
   document.getElementById('joinBtn').onclick=async()=>{try{const code=document.getElementById('joinCode').value.toUpperCase();const r=await api('/api/games/'+code+'/join',{method:'POST',body:JSON.stringify({name:document.getElementById('joinName').value||'Player'})});onlineCode=r.game.code;onlinePlayer=r.playerId;sessionStorage.setItem('hunt-code',onlineCode);sessionStorage.setItem('hunt-player',onlinePlayer);paintOnline(r.game);show('lobby');beginPoll()}catch(e){toast(e.message)}};
   document.getElementById('startBtn').onclick=async()=>{try{const r=await api('/api/games/'+onlineCode+'/start',{method:'POST',body:JSON.stringify({hostId:onlinePlayer})});paintOnline(r.game);show('game')}catch(e){toast(e.message)}};
   document.getElementById('pingNow').onclick=async()=>{try{const r=await api('/api/games/'+onlineCode+'/ping',{method:'POST',body:JSON.stringify({hostId:onlinePlayer})});paintOnline(r.game);toast('Ping wave shared with the lobby')}catch(e){toast(e.message)}};
@@ -110,6 +111,7 @@ function paintOnline(g){onlineCode=g.code;onlineHostId=g.hostId;document.getElem
 }
 </script><script src="enhancements.js"></script>
 </body></html>
+
 
 
 

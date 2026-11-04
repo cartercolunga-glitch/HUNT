@@ -11,7 +11,7 @@ const ROOT = __dirname;
 const games = new Map();
 const mime = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.webmanifest':'application/manifest+json','.css':'text/css','.b64':'text/plain; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml'};
 
-function code(){return crypto.randomBytes(3).toString('hex').toUpperCase()}
+function code(){return String(Math.floor(1000+Math.random()*9000))}
 function id(){return crypto.randomUUID()}
 function send(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Content-Type'});res.end(JSON.stringify(data))}
 function body(req){return new Promise((resolve,reject)=>{let raw='';req.on('data',c=>raw+=c);req.on('end',()=>{try{resolve(raw?JSON.parse(raw):{})}catch(e){reject(e)}})})}
@@ -26,7 +26,7 @@ const server=http.createServer(async (req,res)=>{
   const url=new URL(req.url,'http://localhost');
   try{
     if(url.pathname==='/api/games'&&req.method==='POST'){
-      const b=await body(req);let gameCode=code();while(games.has(gameCode))gameCode=code();
+      const b=await body(req);if(!String(b.hostName||'').trim())return send(res,400,{error:'Host name is required'});let gameCode=code();while(games.has(gameCode))gameCode=code();
       const host={id:id(),name:b.hostName||'Host',role:'UNASSIGNED',ready:false,status:'waiting',locationShared:false};
       const game={code:gameCode,name:b.name||'Outdoor Hunt',area:b.area||'Agreed play area',duration:b.duration||'45 minutes',mode:b.mode||'Classic',status:'lobby',pingWave:0,createdAt:Date.now(),startedAt:null,players:[host],hostId:host.id,zone:b.zone||{type:'circle',radius:500},rules:{tagRange:b.tagRange||'1 m',headStart:b.headStart||'2 minutes',pingInterval:b.pingInterval||'5 minutes',autoPing:b.autoPing!==false,pingSound:b.pingSound!==false,requireLocationSharing:b.requireLocationSharing!==false,runnerMap:b.runnerMap!==false,maxPlayers:Number(b.maxPlayers)||20,hunterCount:Math.max(1,Number(b.hunterCount)||1),locationPrecision:b.locationPrecision||'Approximate',connectionMode:b.connectionMode||'internet',chatEnabled:b.chatEnabled!==false,autoEnd:b.autoEnd!==false},messages:[],locations:{},pingSnapshot:{}};games.set(gameCode,game);return send(res,201,{game:safe(game,host.id),playerId:host.id})
     }

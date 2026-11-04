@@ -52,7 +52,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
 const screens=['home','create','join','lobby','game','results'];
-function show(id){screens.forEach(x=>document.getElementById(x).classList.toggle('hidden',x!==id));if(id==='lobby'){addLobbyTools();addConnectivityCard();addVideoRules();addHostMap();wireConnectionMode();applyHostVisibility()}window.scrollTo({top:0,behavior:'smooth'})}
+function show(id){screens.forEach(x=>document.getElementById(x).classList.toggle('hidden',x!==id));if(id==='lobby'){addLobbyTools();addConnectivityCard();addVideoRules();addHostMap();wireConnectionMode();applyHostVisibility()}}
 document.querySelectorAll('[data-screen]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.screen)));
 const saved=JSON.parse(localStorage.getItem('hunt-demo')||'null');
 if(saved){document.getElementById('area').value=saved.area;}
@@ -110,6 +110,7 @@ function paintOnline(g){onlineCode=g.code;onlineHostId=g.hostId;document.getElem
 }
 </script><script src="enhancements.js"></script>
 </body></html>
+
 
 
 

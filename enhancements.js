@@ -12,6 +12,8 @@
     .hunter-live-map{height:260px;border-radius:15px;border:1px solid #55733e;overflow:hidden;background:#142118;position:relative;margin:18px 0}
     .hunter-live-map .ping-label{position:absolute;z-index:500;left:12px;top:11px;padding:6px 9px;border-radius:999px;background:#071018dd;color:var(--lime);font-size:10px;font-weight:900;letter-spacing:.1em}
     .hunter-live-map .waiting-ping{position:absolute;inset:0;display:grid;place-items:center;color:#c7f36b99;font-size:11px;font-weight:900;letter-spacing:.1em;pointer-events:none}
+    .shared-live-map{height:260px;border-radius:15px;border:1px solid #426176;overflow:hidden;background:#142118;position:relative;margin:18px 0}
+    .shared-live-map .map-label{position:absolute;z-index:500;left:12px;top:11px;padding:6px 9px;border-radius:999px;background:#071018dd;color:#9ee8ff;font-size:10px;font-weight:900;letter-spacing:.1em}
     @media (max-width:700px){.photo-bg{background-position:58% center!important;background-size:auto 100%!important}.map-fullscreen{padding:16px 12px calc(90px + env(safe-area-inset-bottom))!important}.map-fullscreen #hostMap{height:calc(100vh - 220px)!important;min-height:320px}}
   `;
   document.head.append(style);
@@ -24,9 +26,9 @@
   function updateTimer(){const el=document.querySelector('#timer');if(!el||!latest?.startedAt||latest.status!=='live')return;const total=Math.max(0,Number(latest.remainingSeconds??0));el.textContent=String(Math.floor(total/60)).padStart(2,'0')+':'+String(total%60).padStart(2,'0')}
   function wireAdminTiming(isHost){
     const card=document.querySelector('#adminCard');if(!card||!isHost)return;const grid=card.querySelector('.admingrid');if(!grid)return;
-    const add=(id,label,options)=>{let field=document.querySelector('#'+id);if(field)return field;const wrap=document.createElement('div');wrap.className='adminfield';wrap.innerHTML='<label>'+label+'</label><select id="'+id+'">'+options.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('')+'</select>';grid.prepend(wrap);field=wrap.querySelector('select');field.onchange=async()=>{try{await api('/api/games/'+code()+'/config',{method:'POST',body:JSON.stringify({hostId:player(),[id==='adminAutoPing'?'autoPing':id==='adminPingSound'?'pingSound':'requireLocationSharing']:field.value==='on'})});window.toast?.('Setting saved')}catch(e){window.toast?.(e.message)}};return field};
-    const auto=add('adminAutoPing','AUTO PINGS',[['on','On'],['off','Off']]);const sound=add('adminPingSound','PING DING',[['on','On'],['off','Off']]);const sharing=add('adminRequireLocation','REQUIRE RUNNER LOCATION',[['on','On'],['off','Off']]);
-    if(auto&&latest?.rules)auto.value=latest.rules.autoPing===false?'off':'on';if(sound&&latest?.rules)sound.value=latest.rules.pingSound===false?'off':'on';if(sharing&&latest?.rules)sharing.value=latest.rules.requireLocationSharing===false?'off':'on';
+    const add=(id,label,options)=>{let field=document.querySelector('#'+id);if(field)return field;const wrap=document.createElement('div');wrap.className='adminfield';wrap.innerHTML='<label>'+label+'</label><select id="'+id+'">'+options.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('')+'</select>';grid.prepend(wrap);field=wrap.querySelector('select');field.onchange=async()=>{try{const key=id==='adminAutoPing'?'autoPing':id==='adminPingSound'?'pingSound':id==='adminRunnerMap'?'runnerMap':'requireLocationSharing';await api('/api/games/'+code()+'/config',{method:'POST',body:JSON.stringify({hostId:player(),[key]:field.value==='on'})});window.toast?.('Setting saved')}catch(e){window.toast?.(e.message)}};return field};
+    const auto=add('adminAutoPing','AUTO PINGS',[['on','On'],['off','Off']]);const sound=add('adminPingSound','PING DING',[['on','On'],['off','Off']]);const sharing=add('adminRequireLocation','REQUIRE RUNNER LOCATION',[['on','On'],['off','Off']]);const runner=add('adminRunnerMap','RUNNER LIVE MAP',[['on','On'],['off','Off']]);
+    if(auto&&latest?.rules)auto.value=latest.rules.autoPing===false?'off':'on';if(sound&&latest?.rules)sound.value=latest.rules.pingSound===false?'off':'on';if(sharing&&latest?.rules)sharing.value=latest.rules.requireLocationSharing===false?'off':'on';if(runner&&latest?.rules)runner.value=latest.rules.runnerMap===false?'off':'on';
   }
   const modeDescriptions={
     Classic:'Runners are out when tagged. A clean, simple chase.',
@@ -41,15 +43,14 @@
     if(!area||area===lastArea)return;lastArea=area;
     try{const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q='+encodeURIComponent(area));const hits=await r.json();if(!hits[0])return;const center=[Number(hits[0].lat),Number(hits[0].lon)];if(typeof ensureHostMap==='function')ensureHostMap(center);try{if(typeof hostMap!=='undefined'&&hostMap)hostMap.setView(center,14)}catch(_){}}catch(_){}
   }
-  function ensureHunterMap(g){
+  function ensureLiveMap(g){
     const me=g.players.find(p=>p.id===player());const game=document.querySelector('#game');if(!game||!me||g.status!=='live')return;
-    const old=game.querySelector('.radar');if(!old&&game.querySelector('#hunterPingMap')){if(me.role!=='HUNTER')game.querySelector('#hunterPingMap').style.display='none';return}
-    if(me.role!=='HUNTER')return;
-    let mapEl=game.querySelector('#hunterPingMap');
-    if(!mapEl){mapEl=document.createElement('div');mapEl.id='hunterPingMap';mapEl.className='hunter-live-map';mapEl.innerHTML='<div class="ping-label">HUNTER MAP · PING MEMORY</div><div class="waiting-ping">WAITING FOR THE FIRST PING</div>';if(old)old.replaceWith(mapEl);else game.querySelector('.notice')?.before(mapEl)}
+    const hunter=me.role==='HUNTER';const caught=me.status==='tagged';const old=game.querySelector('.radar');let mapEl=game.querySelector('#liveSharedMap');
+    if(!mapEl){mapEl=document.createElement('div');mapEl.id='liveSharedMap';mapEl.className=hunter?'hunter-live-map':'shared-live-map';mapEl.innerHTML=hunter?'<div class="ping-label">HUNTER MAP · PING MEMORY</div><div class="waiting-ping">WAITING FOR THE FIRST PING</div>':'<div class="map-label">RUNNER MAP · LIVE CREW</div>';if(old)old.replaceWith(mapEl);else game.querySelector('.notice')?.before(mapEl)}
+    if(!hunter)mapEl.className='shared-live-map';
     if(window.L&&!liveMap){liveMap=L.map(mapEl,{zoomControl:true}).setView([40.2338,-111.6585],13);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(liveMap);liveLayer=L.layerGroup().addTo(liveMap)}
-    const snapshot=Object.values(g.pingSnapshot||{});const waiting=mapEl.querySelector('.waiting-ping');if(waiting)waiting.style.display=snapshot.length?'none':'grid';
-    if(g.pingWave!==lastPing){lastPing=g.pingWave;if(liveLayer){liveLayer.clearLayers();snapshot.forEach((p,i)=>L.circleMarker([p.latitude,p.longitude],{radius:10,color:'#ff6b6b',fillColor:'#ff6b6b',fillOpacity:.85,weight:3}).bindTooltip('Runner ping '+(i+1)).addTo(liveLayer));if(snapshot.length)liveMap.fitBounds(snapshot.map(p=>[p.latitude,p.longitude]),{padding:[35,35],maxZoom:16})}}
+    const points=hunter?Object.entries(g.pingSnapshot||{}):Object.entries(g.locations||{});const waiting=mapEl.querySelector('.waiting-ping');if(waiting)waiting.style.display=points.length?'none':'grid';
+    if(!hunter||g.pingWave!==lastPing){if(hunter)lastPing=g.pingWave;if(liveLayer){liveLayer.clearLayers();const byId=Object.fromEntries(g.players.map(p=>[p.id,p]));points.forEach(([id,p])=>{const person=byId[id];const color=person?.status==='tagged'?'#ff3b30':person?.role==='HUNTER'?'#ff9f43':'#38a8ff';L.circleMarker([p.latitude,p.longitude],{radius:10,color,fillColor:color,fillOpacity:.9,weight:3}).bindTooltip(person?.status==='tagged'?'Caught runner':person?.name||'Player').addTo(liveLayer)});if(points.length)liveMap.fitBounds(points.map(([,p])=>[p.latitude,p.longitude]),{padding:[35,35],maxZoom:16})}}
     setTimeout(()=>liveMap?.invalidateSize(),80);
   }
   function wireReady(){
@@ -78,7 +79,8 @@
     const start=document.querySelector('#startBtn');if(start){start.style.display=isHost&&g.status==='lobby'?'block':'none';start.disabled=!allReady;start.textContent=allReady?'Start game':'Waiting for Ready';}
     const ready=document.querySelector('#readyBtn'),me=g.players.find(p=>p.id===id);if(ready&&me){ready.dataset.ready=String(!!me.ready);ready.textContent=me.ready?'Ready ✓':'Tap Ready';}
     const gameRole=document.querySelector('#game .role');if(gameRole&&me&&g.status==='live')gameRole.textContent='YOU: '+(me.role==='HUNTER'?'HUNTER':'RUNNER');
-    wireHunterSetting(isHost);wireAdminTiming(isHost);if(isHost){wireMap();centerFromTypedArea(g.area)}ensureHunterMap(g);
+    wireHunterSetting(isHost);wireAdminTiming(isHost);if(isHost){wireMap();centerFromTypedArea(g.area)}ensureLiveMap(g);
+    const notice=document.querySelector('#game .notice');if(notice&&me?.status==='tagged')notice.textContent="You've been caught, return to the start and enjoy the show";
     if(g.status==='live'&&g.pingWave>seenPing){if(seenPing>=0&&g.players.find(p=>p.id===id)?.role==='HUNTER'&&g.rules?.pingSound!==false)ding();seenPing=g.pingWave}
     updateTimer();
     if(!timerHandle)timerHandle=setInterval(updateTimer,1000);

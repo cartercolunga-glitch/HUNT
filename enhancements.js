@@ -15,11 +15,19 @@
     @media (max-width:700px){.photo-bg{background-position:58% center!important;background-size:auto 100%!important}.map-fullscreen{padding:16px 12px calc(90px + env(safe-area-inset-bottom))!important}.map-fullscreen #hostMap{height:calc(100vh - 220px)!important;min-height:320px}}
   `;
   document.head.append(style);
-  let latest=null, mapWired=false, lastArea='', liveMap=null, liveLayer=null, lastPing=-1;
+  let latest=null, mapWired=false, lastArea='', liveMap=null, liveLayer=null, lastPing=-1, seenPing=-1, timerHandle=null;
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const code=()=>sessionStorage.getItem('hunt-code');
   const player=()=>sessionStorage.getItem('hunt-player');
   async function api(path,options={}){const r=await fetch(path,{headers:{'Content-Type':'application/json'},...options});const d=await r.json();if(!r.ok)throw Error(d.error||'Request failed');return d}
+  function ding(){try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const ctx=new C(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.type='sine';osc.frequency.value=880;gain.gain.setValueAtTime(.0001,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(.16,ctx.currentTime+.02);gain.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+.28);osc.connect(gain).connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+.3);navigator.vibrate?.(120)}catch(_){} }
+  function updateTimer(){const el=document.querySelector('#timer');if(!el||!latest?.startedAt||latest.status!=='live')return;const total=Math.max(0,Number(latest.remainingSeconds??0));el.textContent=String(Math.floor(total/60)).padStart(2,'0')+':'+String(total%60).padStart(2,'0')}
+  function wireAdminTiming(isHost){
+    const card=document.querySelector('#adminCard');if(!card||!isHost)return;const grid=card.querySelector('.admingrid');if(!grid)return;
+    const add=(id,label,options)=>{let field=document.querySelector('#'+id);if(field)return field;const wrap=document.createElement('div');wrap.className='adminfield';wrap.innerHTML='<label>'+label+'</label><select id="'+id+'">'+options.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('')+'</select>';grid.prepend(wrap);field=wrap.querySelector('select');field.onchange=async()=>{try{await api('/api/games/'+code()+'/config',{method:'POST',body:JSON.stringify({hostId:player(),[id==='adminAutoPing'?'autoPing':id==='adminPingSound'?'pingSound':'requireLocationSharing']:field.value==='on'})});window.toast?.('Setting saved')}catch(e){window.toast?.(e.message)}};return field};
+    const auto=add('adminAutoPing','AUTO PINGS',[['on','On'],['off','Off']]);const sound=add('adminPingSound','PING DING',[['on','On'],['off','Off']]);const sharing=add('adminRequireLocation','REQUIRE RUNNER LOCATION',[['on','On'],['off','Off']]);
+    if(auto&&latest?.rules)auto.value=latest.rules.autoPing===false?'off':'on';if(sound&&latest?.rules)sound.value=latest.rules.pingSound===false?'off':'on';if(sharing&&latest?.rules)sharing.value=latest.rules.requireLocationSharing===false?'off':'on';
+  }
   const modeDescriptions={
     Classic:'Runners are out when tagged. A clean, simple chase.',
     Infection:'Tagged runners switch sides and become hunters.',
@@ -70,7 +78,10 @@
     const start=document.querySelector('#startBtn');if(start){start.style.display=isHost&&g.status==='lobby'?'block':'none';start.disabled=!allReady;start.textContent=allReady?'Start game':'Waiting for Ready';}
     const ready=document.querySelector('#readyBtn'),me=g.players.find(p=>p.id===id);if(ready&&me){ready.dataset.ready=String(!!me.ready);ready.textContent=me.ready?'Ready ✓':'Tap Ready';}
     const gameRole=document.querySelector('#game .role');if(gameRole&&me&&g.status==='live')gameRole.textContent='YOU: '+(me.role==='HUNTER'?'HUNTER':'RUNNER');
-    wireHunterSetting(isHost);if(isHost){wireMap();centerFromTypedArea(g.area)}ensureHunterMap(g);
+    wireHunterSetting(isHost);wireAdminTiming(isHost);if(isHost){wireMap();centerFromTypedArea(g.area)}ensureHunterMap(g);
+    if(g.status==='live'&&g.pingWave>seenPing){if(seenPing>=0&&g.players.find(p=>p.id===id)?.role==='HUNTER'&&g.rules?.pingSound!==false)ding();seenPing=g.pingWave}
+    updateTimer();
+    if(!timerHandle)timerHandle=setInterval(updateTimer,1000);
   }
   async function sync(){const c=code();if(!c)return;try{const d=await api('/api/games/'+c+'?playerId='+encodeURIComponent(player()||''));render(d.game)}catch(_){} }
   setInterval(sync,1000);setTimeout(sync,250);

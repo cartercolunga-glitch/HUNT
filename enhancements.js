@@ -19,12 +19,14 @@
     @media (max-width:700px){.photo-bg{background-position:74% 0!important;background-size:auto 112%!important;filter:saturate(1.2) contrast(1.04) brightness(1.72)!important}.map-fullscreen{padding:16px 12px calc(90px + env(safe-area-inset-bottom))!important}.map-fullscreen #hostMap{height:calc(100vh - 220px)!important;min-height:320px}}
   `;
   document.head.append(style);
-  let latest=null, latestSyncedAt=0, mapWired=false, lastArea='', liveMap=null, liveLayer=null, lastPing=-1, seenPing=-1, timerHandle=null, boundaryWarning=false;
+  let latest=null, latestSyncedAt=0, mapWired=false, lastArea='', liveMap=null, liveLayer=null, liveBoundary=null, lastPing=-1, seenPing=-1, timerHandle=null, boundaryWarning=false;
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const code=()=>sessionStorage.getItem('hunt-code');
   const player=()=>sessionStorage.getItem('hunt-player');
   async function api(path,options={}){const r=await fetch(path,{headers:{'Content-Type':'application/json'},...options});const d=await r.json();if(!r.ok)throw Error(d.error||'Request failed');return d}
-  function ding(){try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const ctx=new C(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.type='sine';osc.frequency.value=880;gain.gain.setValueAtTime(.0001,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(.16,ctx.currentTime+.02);gain.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+.28);osc.connect(gain).connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+.3);navigator.vibrate?.(120)}catch(_){} }
+  let audioContext=null;
+  function unlockAudio(){try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;audioContext=audioContext||new C();if(audioContext.state==='suspended')audioContext.resume()}catch(_){} }
+  function ding(){try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;audioContext=audioContext||new C();audioContext.resume?.();const osc=audioContext.createOscillator(),gain=audioContext.createGain();osc.type='sine';osc.frequency.value=880;gain.gain.setValueAtTime(.0001,audioContext.currentTime);gain.gain.exponentialRampToValueAtTime(.2,audioContext.currentTime+.02);gain.gain.exponentialRampToValueAtTime(.0001,audioContext.currentTime+.32);osc.connect(gain).connect(audioContext.destination);osc.start();osc.stop(audioContext.currentTime+.34);navigator.vibrate?.([120,70,120])}catch(_){} }
   function parseSeconds(value){const m=String(value||'').match(/(\d+(?:\.\d+)?)\s*(second|minute|hour)/i);if(!m)return 0;const n=Number(m[1]);return m[2].toLowerCase().startsWith('hour')?n*3600:m[2].toLowerCase().startsWith('minute')?n*60:n}
   function clock(total){total=Math.max(0,Math.floor(Number(total)||0));return String(Math.floor(total/60)).padStart(2,'0')+':'+String(total%60).padStart(2,'0')}
   function updateTimer(){const loading=document.querySelector('#huntLoading');if(loading&&latest?.status==='starting'){const left=Math.max(0,Number(latest.launchAt||0)-Date.now());const count=loading.querySelector('.hunt-loading-count');if(count)count.textContent='STARTING IN '+Math.ceil(left/1000);return}const el=document.querySelector('#timer');if(!el||!latest?.startedAt||latest.status!=='live')return;const sinceSync=Math.floor((Date.now()-latestSyncedAt)/1000);const total=Math.max(0,Number(latest.remainingSeconds??0)-sinceSync);el.textContent=clock(total);const ping=document.querySelector('#nextPingCountdown');if(ping){const p=latest.nextPingSeconds==null?null:Math.max(0,Number(latest.nextPingSeconds)-sinceSync);ping.textContent=p==null?'Next ping: off':p===0?'Next ping: now':'Next ping in '+clock(p)}}
@@ -50,21 +52,24 @@
     if(!area||area===lastArea)return;lastArea=area;
     try{const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q='+encodeURIComponent(area));const hits=await r.json();if(!hits[0])return;const center=[Number(hits[0].lat),Number(hits[0].lon)];if(typeof ensureHostMap==='function')ensureHostMap(center);try{if(typeof hostMap!=='undefined'&&hostMap)hostMap.setView(center,14)}catch(_){}}catch(_){}
   }
+  function zoneCenter(zone){if(zone?.type==='polygon'&&Array.isArray(zone.points)&&zone.points.length){const lat=zone.points.reduce((s,p)=>s+Number(p[0]),0)/zone.points.length,lng=zone.points.reduce((s,p)=>s+Number(p[1]),0)/zone.points.length;return [lat,lng]}if(zone?.type==='circle'&&zone.center)return [Number(zone.center[0]),Number(zone.center[1])];return null}
+  function drawLiveBoundary(zone){if(!liveMap||!window.L)return;liveBoundary?.remove?.();liveBoundary=null;if(zone?.type==='polygon'&&Array.isArray(zone.points)&&zone.points.length>=3){liveBoundary=L.polygon(zone.points,{color:'#c7ff52',weight:3,fillColor:'#c7ff52',fillOpacity:.08}).addTo(liveMap);liveMap.fitBounds(liveBoundary.getBounds(),{padding:[28,28],maxZoom:16})}else if(zone?.type==='circle'&&zone.center&&zone.radius){liveBoundary=L.circle([Number(zone.center[0]),Number(zone.center[1])],{radius:Number(zone.radius),color:'#c7ff52',weight:3,fillColor:'#c7ff52',fillOpacity:.08}).addTo(liveMap);liveMap.fitBounds(liveBoundary.getBounds(),{padding:[28,28],maxZoom:16})}}
   function ensureLiveMap(g){
     const me=g.players.find(p=>p.id===player());const game=document.querySelector('#game');if(!game||!me||g.status!=='live')return;
-    const hunter=me.role==='HUNTER';const caught=me.status==='tagged';const old=game.querySelector('.radar');let mapEl=game.querySelector('#liveSharedMap');
+    const hunter=me.role==='HUNTER';const old=game.querySelector('.radar');let mapEl=game.querySelector('#liveSharedMap');
     if(!mapEl){mapEl=document.createElement('div');mapEl.id='liveSharedMap';mapEl.className=hunter?'hunter-live-map':'shared-live-map';mapEl.innerHTML=hunter?'<div class="ping-label">HUNTER MAP · PING MEMORY</div><div class="waiting-ping">WAITING FOR THE FIRST PING</div>':'<div class="map-label">RUNNER MAP · LIVE CREW</div>';if(old)old.replaceWith(mapEl);else game.querySelector('.notice')?.before(mapEl)}
-    if(!hunter)mapEl.className='shared-live-map';
-    if(window.L&&!liveMap){liveMap=L.map(mapEl,{zoomControl:true}).setView([40.2338,-111.6585],13);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(liveMap);liveLayer=L.layerGroup().addTo(liveMap)}
-    const points=hunter?Object.entries(g.pingSnapshot||{}):Object.entries(g.locations||{});const waiting=mapEl.querySelector('.waiting-ping');if(waiting)waiting.style.display=points.length?'none':'grid';
-    if(!hunter||g.pingWave!==lastPing){if(hunter)lastPing=g.pingWave;if(liveLayer){liveLayer.clearLayers();const byId=Object.fromEntries(g.players.map(p=>[p.id,p]));points.forEach(([id,p])=>{const person=byId[id];const color=person?.status==='tagged'?'#ff3b30':person?.role==='HUNTER'?'#ff9f43':'#38a8ff';L.circleMarker([p.latitude,p.longitude],{radius:10,color,fillColor:color,fillOpacity:.9,weight:3}).bindTooltip(person?.status==='tagged'?'Caught runner':person?.name||'Player').addTo(liveLayer)});if(points.length)liveMap.fitBounds(points.map(([,p])=>[p.latitude,p.longitude]),{padding:[35,35],maxZoom:16})}}
+    mapEl.className=hunter?'hunter-live-map':'shared-live-map';
+    const center=zoneCenter(g.zone)||[40.2338,-111.6585];
+    if(window.L&&!liveMap){liveMap=L.map(mapEl,{zoomControl:true}).setView(center,15);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(liveMap);liveLayer=L.layerGroup().addTo(liveMap);drawLiveBoundary(g.zone)}else if(liveMap&&!liveBoundary)drawLiveBoundary(g.zone);
+    const points=hunter?{...(g.pingSnapshot||{}),...(g.locations?.[me.id]?{[me.id]:g.locations[me.id]}:{})}:g.locations||{};const entries=Object.entries(points);const waiting=mapEl.querySelector('.waiting-ping');if(waiting)waiting.style.display=entries.length>1?'none':'grid';
+    if(!hunter||g.pingWave!==lastPing){if(hunter)lastPing=g.pingWave;if(liveLayer){liveLayer.clearLayers();const byId=Object.fromEntries(g.players.map(p=>[p.id,p]));entries.forEach(([id,p])=>{const person=byId[id];const color=person?.status==='tagged'?'#ff3b30':person?.role==='HUNTER'?'#ff9f43':'#38a8ff';L.circleMarker([p.latitude,p.longitude],{radius:10,color,fillColor:color,fillOpacity:.95,weight:3}).bindTooltip(person?.status==='tagged'?'Caught runner':person?.name||'Player').addTo(liveLayer)});if(!liveBoundary&&entries.length)liveMap.fitBounds(entries.map(([,p])=>[p.latitude,p.longitude]),{padding:[35,35],maxZoom:16})}}
     setTimeout(()=>liveMap?.invalidateSize(),80);
   }
   function wireReady(){
     if(!document.querySelector('#lobby')||document.querySelector('#readyBtn'))return;
     const start=document.querySelector('#startBtn');if(!start)return;
     const btn=document.createElement('button');btn.id='readyBtn';btn.className='btn ready-action';btn.textContent='Tap Ready';start.before(btn);
-    btn.onclick=async()=>{try{const me=latest?.players.find(p=>p.id===player());const next=!me?.ready;const d=await api('/api/games/'+code()+'/ready',{method:'POST',body:JSON.stringify({playerId:player(),ready:next})});render(d.game)}catch(e){window.toast?.(e.message)}};
+    btn.onclick=async()=>{unlockAudio();try{const me=latest?.players.find(p=>p.id===player());const next=!me?.ready;const d=await api('/api/games/'+code()+'/ready',{method:'POST',body:JSON.stringify({playerId:player(),ready:next})});render(d.game)}catch(e){window.toast?.(e.message)}};
   }
   function wireMap(){
     const map=document.querySelector('#hostMap'),card=document.querySelector('#mapCard');if(!map||!card||mapWired)return;mapWired=true;
@@ -99,7 +104,7 @@
     wireHunterSetting(isHost);wireAdminTiming(isHost);if(isHost){wireMap();centerFromTypedArea(g.area)}ensureLiveMap(g);
     const pill=document.querySelector('#game .modepill');if(pill)pill.textContent=String(g.mode||'Classic').toUpperCase()+' · '+String(g.duration||'45 minutes').toUpperCase();
     const notice=document.querySelector('#game .notice');if(notice){if(me?.status==='tagged')notice.textContent="You've been caught, return to the start and enjoy the show";else if(g.status==='live'&&g.rules?.autoPing!==false&&g.nextPingSeconds!=null)notice.innerHTML='<b id="nextPingCountdown">Next ping in '+clock(g.nextPingSeconds)+'</b><br>'+((me?.role==='HUNTER')?'Runner positions stay hidden between waves. Move safely and keep your surroundings in view.':'Stay aware — the next runner ping is coming soon. Keep your surroundings in view.');}
-    ensureLoading(g);checkBoundary(g);if(g.status==='live'&&g.pingWave>seenPing){if(seenPing>=0&&g.players.find(p=>p.id===id)?.role==='HUNTER'&&g.rules?.pingSound!==false)ding();seenPing=g.pingWave}
+    ensureLoading(g);checkBoundary(g);if(g.status==='live'&&g.pingWave>seenPing){if(seenPing>=0&&g.rules?.pingSound!==false)ding();seenPing=g.pingWave}
     latestSyncedAt=Date.now();updateTimer();
     if(!timerHandle)timerHandle=setInterval(updateTimer,1000);
   }

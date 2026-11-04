@@ -2,7 +2,7 @@
   const style=document.createElement('style');
   style.textContent=`
     .map:after{background:linear-gradient(180deg,#ffffff24,#00000044),url('./hunt-app-icon.png') center/contain no-repeat!important;filter:brightness(1.28) saturate(1.12)}
-    .photo-bg{background-position:center 38%!important;background-size:cover!important;filter:saturate(1.12) contrast(1.02) brightness(1.18)!important}
+    .photo-bg{background-position:center 38%!important;background-size:cover!important;filter:saturate(1.12) contrast(1.02) brightness(1.18)!important}.eyebrow,.badge{display:none!important}
     .map-fullscreen{position:fixed!important;inset:0!important;z-index:30;background:#071018f7!important;padding:20px 18px 100px!important;overflow:auto;border-radius:0!important;margin:0!important;max-width:none!important}
     .map-fullscreen #hostMap{height:calc(100vh - 250px)!important;min-height:360px}
     .map-close{display:none;position:absolute;right:18px;top:18px;z-index:3}

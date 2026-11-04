@@ -16,7 +16,7 @@
     .hunter-live-map .waiting-ping{position:absolute;inset:0;display:grid;place-items:center;color:#c7f36b99;font-size:11px;font-weight:900;letter-spacing:.1em;pointer-events:none}
     .shared-live-map{height:260px;border-radius:15px;border:1px solid #426176;overflow:hidden;background:#142118;position:relative;margin:18px 0}
     .shared-live-map .map-label{position:absolute;z-index:500;left:12px;top:11px;padding:6px 9px;border-radius:999px;background:#071018dd;color:#9ee8ff;font-size:10px;font-weight:900;letter-spacing:.1em}
-    @media (max-width:700px){.photo-bg{background-position:74% 6%!important;background-size:auto 125%!important}.map-fullscreen{padding:16px 12px calc(90px + env(safe-area-inset-bottom))!important}.map-fullscreen #hostMap{height:calc(100vh - 220px)!important;min-height:320px}}
+    @media (max-width:700px){.photo-bg{background-position:74% 0!important;background-size:auto 112%!important;filter:saturate(1.2) contrast(1.04) brightness(1.72)!important}.map-fullscreen{padding:16px 12px calc(90px + env(safe-area-inset-bottom))!important}.map-fullscreen #hostMap{height:calc(100vh - 220px)!important;min-height:320px}}
   `;
   document.head.append(style);
   let latest=null, latestSyncedAt=0, mapWired=false, lastArea='', liveMap=null, liveLayer=null, lastPing=-1, seenPing=-1, timerHandle=null, boundaryWarning=false;

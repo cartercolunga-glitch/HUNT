@@ -5,6 +5,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const WebSocket = require('ws');
 
 const PORT = process.env.PORT || 8787;
 const ROOT = __dirname;
@@ -18,6 +19,8 @@ function send(res,status,data){res.writeHead(status,{'Content-Type':'application
 function body(req){return new Promise((resolve,reject)=>{let raw='';req.on('data',c=>raw+=c);req.on('end',()=>{try{resolve(raw?JSON.parse(raw):{})}catch(e){reject(e)}})})}
 function saveGames(){try{fs.mkdirSync(path.dirname(DATA_FILE),{recursive:true});fs.writeFileSync(DATA_FILE,JSON.stringify([...games.entries()]),'utf8')}catch(e){console.warn('Persistence unavailable:',e.message)}}
 function loadGames(){try{if(!fs.existsSync(DATA_FILE))return;const saved=JSON.parse(fs.readFileSync(DATA_FILE,'utf8'));for(const [key,value] of saved)if(value?.code)games.set(key,value);console.log(`Restored ${games.size} game(s)`)}catch(e){console.warn('Could not restore saved games:',e.message)}}
+const sockets=new Map();
+function broadcast(game){const room=sockets.get(game.code);if(!room)return;for(const [socket,viewerId] of room){if(socket.readyState===WebSocket.OPEN)socket.send(JSON.stringify({game:safe(game,viewerId)}))}}
 function secondsFrom(value){const m=String(value||'').match(/(\d+(?:\.\d+)?)\s*(second|minute|hour)/i);if(!m)return 0;const n=Number(m[1]);return m[2].toLowerCase().startsWith('hour')?n*3600:m[2].toLowerCase().startsWith('minute')?n*60:n}
 function emitPing(game){game.pingWave+=1;game.lastPingAt=Date.now();game.pingSnapshot={};for(const p of game.players)if(p.role==='RUNNER'&&game.locations[p.id]&&(game.rules.requireLocationSharing===false||p.locationShared))game.pingSnapshot[p.id]=game.locations[p.id]}
 function finishGame(game,reason='timer'){game.status='complete';game.completedAt=Date.now();game.endReason=reason;game.remainingSeconds=0;game.nextPingSeconds=null;const runners=game.players.filter(p=>p.role==='RUNNER');const caught=runners.filter(p=>p.status==='tagged');game.result={name:game.name,area:game.area,duration:game.duration,mode:game.mode,winner:runners.length&&caught.length===runners.length?'HUNTERS':'RUNNERS',players:game.players.length,hunters:game.players.filter(p=>p.role==='HUNTER').length,runners:runners.length,caughtRunners:caught.length,tagsConfirmed:caught.length,safetyStops:reason==='safety'?1:0,reason};return game.result}
@@ -36,7 +39,7 @@ const server=http.createServer(async (req,res)=>{
       const game={code:gameCode,name:b.name||'Outdoor Hunt',area:b.area||'Agreed play area',duration:b.duration||'45 minutes',mode:b.mode||'Classic',status:'lobby',pingWave:0,createdAt:Date.now(),startedAt:null,players:[host],hostId:host.id,zone:b.zone||{type:'circle',radius:500},rules:{tagRange:b.tagRange||'1 m',headStart:b.headStart||'2 minutes',pingInterval:b.pingInterval||'5 minutes',autoPing:b.autoPing!==false,pingSound:b.pingSound!==false,requireLocationSharing:b.requireLocationSharing!==false,runnerMap:b.runnerMap!==false,maxPlayers:Number(b.maxPlayers)||20,hunterCount:Math.max(1,Number(b.hunterCount)||1),hunterSelection:b.hunterSelection==='admin'?'admin':'random',hunterIds:Array.isArray(b.hunterIds)?b.hunterIds:[],locationPrecision:b.locationPrecision||'Approximate',connectionMode:b.connectionMode||'internet',chatEnabled:b.chatEnabled!==false,autoEnd:b.autoEnd!==false},messages:[],locations:{},pingSnapshot:{},result:null};games.set(gameCode,game);saveGames();return send(res,201,{game:safe(game,host.id),playerId:host.id})
     }
     if(url.pathname.match(/^\/api\/games\/[^/]+\/join$/)&&req.method==='POST'){
-      const game=getGame(req);if(!game)return send(res,404,{error:'Game not found'});if(game.status!=='lobby')return send(res,409,{error:'This game has already started'});if(game.players.length>=game.rules.maxPlayers)return send(res,409,{error:'This game is full'});const b=await body(req);const player={id:id(),name:b.name||'Player',role:'UNASSIGNED',ready:false,status:'waiting',locationShared:false};game.players.push(player);saveGames();return send(res,201,{game:safe(game,player.id),playerId:player.id})
+      const game=getGame(req);if(!game)return send(res,404,{error:'Game not found'});if(game.status!=='lobby')return send(res,409,{error:'This game has already started'});if(game.players.length>=game.rules.maxPlayers)return send(res,409,{error:'This game is full'});const b=await body(req);const player={id:id(),name:b.name||'Player',role:'UNASSIGNED',ready:false,status:'waiting',locationShared:false};game.players.push(player);saveGames();broadcast(game);return send(res,201,{game:safe(game,player.id),playerId:player.id})
     }
     if(url.pathname.match(/^\/api\/games\/[^/]+$/)&&req.method==='GET'){const game=getGame(req);return game?send(res,200,{game:safe(game,url.searchParams.get('playerId'))}):send(res,404,{error:'Game not found'})}
     const action=url.pathname.match(/^\/api\/games\/([^/]+)\/(start|ready|ping|tag|stop|location|chat|zone|config)$/);
@@ -51,8 +54,8 @@ const server=http.createServer(async (req,res)=>{
       if(action[2]==='chat'&&b.playerId&&b.text){const p=game.players.find(x=>x.id===b.playerId);game.messages.push({id:id(),playerId:b.playerId,name:p?.name||'Player',text:String(b.text).slice(0,240),createdAt:Date.now()});game.messages=game.messages.slice(-100)}
       if(action[2]==='zone'&&b.zone)game.zone=b.zone;
       if(action[2]==='config'){if(b.hostId!==game.hostId)return send(res,403,{error:'Only the host can change settings'});if(b.duration)game.duration=String(b.duration);if(b.mode)game.mode=String(b.mode);const allowed=['tagRange','headStart','pingInterval','autoPing','pingSound','requireLocationSharing','runnerMap','maxPlayers','hunterCount','hunterSelection','hunterIds','locationPrecision','connectionMode','seekerMethod','caughtBehavior','playerRole','scheduleStart','chatEnabled','autoEnd'];for(const key of allowed)if(b[key]!==undefined)game.rules[key]=key==='maxPlayers'?Math.max(game.players.length,Math.min(100,Number(b[key]))):key==='hunterCount'?Math.max(1,Math.min(50,Number(b[key]))):key==='hunterIds'?Array.isArray(b[key])?b[key].filter(id=>game.players.some(p=>p.id===id)):[]:b[key]}
-      if(action[2]==='stop'){finishGame(game,b.reason==='safety'?'safety':'host');saveGames();return send(res,200,{game:safe(game,b.playerId||b.hostId)})}
-      saveGames();
+      if(action[2]==='stop'){finishGame(game,b.reason==='safety'?'safety':'host');saveGames();broadcast(game);return send(res,200,{game:safe(game,b.playerId||b.hostId)})}
+      saveGames();broadcast(game);
       return send(res,200,{game:safe(game,b.playerId||b.hostId)})
     }
     if(req.method==='GET'){
@@ -64,8 +67,12 @@ const server=http.createServer(async (req,res)=>{
 });
 loadGames();
 server.listen(PORT,'0.0.0.0',()=>console.log(`HUNT server running at http://localhost:${PORT}`));
-setInterval(()=>{for(const game of games.values())advanceGame(game);saveGames()},1000);
+setInterval(()=>{for(const game of games.values()){advanceGame(game);broadcast(game)}saveGames()},1000);
 process.on('SIGTERM',()=>{saveGames();server.close(()=>process.exit(0))});
 process.on('SIGINT',()=>{saveGames();server.close(()=>process.exit(0))});
+
+const wss=new WebSocket.Server({noServer:true});
+server.on('upgrade',(req,socket,head)=>{try{const url=new URL(req.url,'http://localhost');if(url.pathname!=='/ws'){socket.destroy();return}const game=getGame(req);const viewerId=url.searchParams.get('playerId');if(!game||!viewerId){socket.destroy();return}wss.handleUpgrade(req,socket,head,client=>{wss.emit('connection',client,game,viewerId)})}catch(_){socket.destroy()}});
+wss.on('connection',(socket,game,viewerId)=>{if(!sockets.has(game.code))sockets.set(game.code,new Map());sockets.get(game.code).set(socket,viewerId);socket.send(JSON.stringify({game:safe(game,viewerId)}));socket.on('close',()=>{const room=sockets.get(game.code);room?.delete(socket);if(room?.size===0)sockets.delete(game.code)})});
 
 

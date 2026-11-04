@@ -108,6 +108,7 @@
     latestSyncedAt=Date.now();updateTimer();
     if(!timerHandle)timerHandle=setInterval(updateTimer,1000);
   }
+  window.huntRenderOnline=render;
   async function sync(){const c=code();if(!c)return;try{const d=await api('/api/games/'+c+'?playerId='+encodeURIComponent(player()||''));render(d.game)}catch(_){} }
   setInterval(sync,1000);setTimeout(sync,250);
 })();

@@ -35,7 +35,7 @@ const server=http.createServer(async (req,res)=>{
       const game=getGame(req);if(!game)return send(res,404,{error:'Game not found'});if(game.players.length>=game.rules.maxPlayers)return send(res,409,{error:'This game is full'});const b=await body(req);const player={id:id(),name:b.name||'Player',role:'UNASSIGNED',ready:false,status:'waiting',locationShared:false};game.players.push(player);return send(res,201,{game:safe(game,player.id),playerId:player.id})
     }
     if(url.pathname.match(/^\/api\/games\/[^/]+$/)&&req.method==='GET'){const game=getGame(req);return game?send(res,200,{game:safe(game,url.searchParams.get('playerId'))}):send(res,404,{error:'Game not found'})}
-    const action=url.pathname.match(/^\/api\/games\/([^/]+)\/(start|ready|ping|tag|stop|location|chat|zone|config)$/);
+    const action=url.pathname.match(/^\/api\/games\/([^/]+)\/(start|ready|ping|tag|stop|location|chat|zone|config|rematch)$/);
     if(action&&req.method==='POST'){
       const game=getGame(req);if(!game)return send(res,404,{error:'Game not found'});const b=await body(req);
       if(['start','ping','stop','zone','config'].includes(action[2])&&b.hostId!==game.hostId)return send(res,403,{error:'Only the host can control this game'});
@@ -47,6 +47,7 @@ const server=http.createServer(async (req,res)=>{
       if(action[2]==='chat'&&b.playerId&&b.text){const p=game.players.find(x=>x.id===b.playerId);game.messages.push({id:id(),playerId:b.playerId,name:p?.name||'Player',text:String(b.text).slice(0,240),createdAt:Date.now()});game.messages=game.messages.slice(-100)}
       if(action[2]==='zone'&&b.zone)game.zone=b.zone;
       if(action[2]==='config'){if(b.hostId!==game.hostId)return send(res,403,{error:'Only the host can change settings'});if(b.duration)game.duration=String(b.duration);if(b.mode)game.mode=String(b.mode);const allowed=['tagRange','headStart','pingInterval','autoPing','pingSound','requireLocationSharing','runnerMap','maxPlayers','hunterCount','hunterSelection','hunterIds','locationPrecision','connectionMode','seekerMethod','caughtBehavior','playerRole','scheduleStart','chatEnabled','autoEnd'];for(const key of allowed)if(b[key]!==undefined)game.rules[key]=key==='maxPlayers'?Math.max(game.players.length,Math.min(100,Number(b[key]))):key==='hunterCount'?Math.max(1,Math.min(50,Number(b[key]))):key==='hunterIds'?Array.isArray(b[key])?b[key].filter(id=>game.players.some(p=>p.id===id)):[]:b[key]}
+      if(action[2]==='rematch'){game.status='lobby';game.pingWave=0;game.startedAt=null;game.launchAt=null;game.launchImage=null;game.remainingSeconds=null;game.lastPingAt=null;game.nextPingSeconds=null;game.pingSnapshot={};game.locations={};game.messages=[];game.result=null;game.players.forEach(p=>{p.role='UNASSIGNED';p.ready=false;p.status='waiting';p.locationShared=false;p.taggedAt=null});return send(res,200,{game:safe(game,b.hostId)})}
       if(action[2]==='stop'){finishGame(game,b.reason==='safety'?'safety':'host');return send(res,200,{game:safe(game,b.playerId||b.hostId)})}
       return send(res,200,{game:safe(game,b.playerId||b.hostId)})
     }

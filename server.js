@@ -56,5 +56,6 @@ const server=http.createServer(async (req,res)=>{
   }catch(e){send(res,500,{error:e.message})}
 });
 server.listen(PORT,'0.0.0.0',()=>console.log(`HUNT server running at http://localhost:${PORT}`));
+setInterval(()=>{for(const game of games.values())advanceGame(game)},1000);
 
 

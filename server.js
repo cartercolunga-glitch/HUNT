@@ -9,7 +9,7 @@ const crypto = require('crypto');
 const PORT = process.env.PORT || 8787;
 const ROOT = __dirname;
 const games = new Map();
-const mime = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.webmanifest':'application/manifest+json','.css':'text/css'};
+const mime = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.webmanifest':'application/manifest+json','.css':'text/css','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml'};
 
 function code(){return crypto.randomBytes(3).toString('hex').toUpperCase()}
 function id(){return crypto.randomUUID()}

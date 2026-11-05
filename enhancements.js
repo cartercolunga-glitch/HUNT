@@ -97,7 +97,7 @@
   function render(g){
     latest=g;wireReady();wireModeDescriptions();const id=player(),isHost=id===g.hostId,allReady=g.players.length>=2&&g.players.every(p=>p.ready);
     const list=document.querySelector('.players');if(list)list.innerHTML=g.players.map(p=>'<div class="player"><div>'+esc(p.name)+'<small>'+(p.ready?'ready':'waiting')+' · location '+(p.locationShared?'on':'off')+'</small></div><span class="role">'+(p.role==='UNASSIGNED'?'WAITING':esc(p.role))+'</span></div>').join('');
-    ['adminCard','mapCard','videoRules','toolbar'].forEach(id=>{const el=document.getElementById(id)||document.querySelector('.'+id);if(el)el.style.display=isHost?'block':'none'});
+    ['adminCard','mapCard','videoRules'].forEach(id=>{const el=document.getElementById(id)||document.querySelector('.'+id);if(el)el.style.display=isHost?'block':'none'});
     const start=document.querySelector('#startBtn');if(start){start.style.display=isHost&&g.status==='lobby'?'block':'none';start.disabled=!allReady;start.textContent=allReady?'Start game':'Waiting for Ready';}
     const ready=document.querySelector('#readyBtn'),me=g.players.find(p=>p.id===id);if(ready&&me){ready.dataset.ready=String(!!me.ready);ready.textContent=me.ready?'Ready ✓':'Tap Ready';}
     const gameRole=document.querySelector('#game .role');if(gameRole&&me&&g.status==='live')gameRole.textContent='YOU: '+(me.role==='HUNTER'?'HUNTER':'RUNNER');

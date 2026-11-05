@@ -2,7 +2,7 @@
   const style=document.createElement('style');
   style.textContent=`
     .map:after{background:linear-gradient(180deg,#ffffff24,#00000044),url('./hunt-app-icon.png') center/contain no-repeat!important;filter:brightness(1.28) saturate(1.12)}
-    .photo-bg{display:none!important}body:has(#home:not(.hidden)) .photo-bg{display:block!important;background-image:linear-gradient(180deg,#02060bb8,#05080dcc 55%,#020409e6),url('./hunt-background.png')!important;background-position:center top!important;background-size:cover!important;filter:brightness(.9) contrast(1.08) saturate(.9)!important}.eyebrow,.badge{display:block!important}
+    .photo-bg{display:none!important}body:has(#home:not(.hidden)) .photo-bg{display:block!important;background-image:linear-gradient(180deg,#02060bb8,#05080dcc 55%,#020409e6),url('./hunt-forest-bg.jpg?v=a9774d0')!important;background-position:center top!important;background-size:cover!important;filter:brightness(.9) contrast(1.08) saturate(.9)!important}.eyebrow,.badge{display:block!important}
     .map-fullscreen{position:fixed!important;inset:0!important;z-index:30;background:#071018f7!important;padding:20px 18px 100px!important;overflow:auto;border-radius:0!important;margin:0!important;max-width:none!important}
     .map-fullscreen #hostMap{height:calc(100vh - 250px)!important;min-height:360px}
     .map-close{display:none;position:absolute;right:18px;top:18px;z-index:3}

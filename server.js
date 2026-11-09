@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 100941)
-Total output lines: 315
-
 // HUNT multiplayer prototype server.
 // Run with: node server.js
 // Then open http://localhost:8787 on the host device and share that address on the same network.

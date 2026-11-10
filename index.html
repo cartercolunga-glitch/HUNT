@@ -85,7 +85,7 @@
 <script>
 const photoStyle=document.createElement('style');photoStyle.textContent='.photo-row{display:flex;gap:14px;align-items:center;margin-top:14px}.photo-thumb,.photo-placeholder{width:72px;height:72px;border-radius:14px;object-fit:cover;border:1px solid var(--line);background:#0c131b;display:grid;place-items:center;color:var(--muted);font-size:10px;font-weight:800}.photo-grid{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px}.photo-person{width:92px;display:grid;gap:4px;text-align:center;font-size:11px}.photo-person img{width:92px;height:92px;object-fit:cover;border-radius:14px;border:2px solid #9ee8ff}.photo-person small{color:var(--muted);font-size:9px}.photo-state{margin-top:7px;font-size:11px}';document.head.append(photoStyle);
 const screens=['home','create','join','lobby','game','results'];
-function show(id){screens.forEach(x=>document.getElementById(x).classList.toggle('hidden',x!==id));if(id==='lobby'){addLobbyTools();addConnectivityCard();addVideoRules();addHostMap();wireConnectionMode();applyHostVisibility()}}
+function show(id){screens.forEach(x=>document.getElementById(x)?.classList.toggle('hidden',x!==id));if(id==='lobby'){addLobbyTools();addConnectivityCard();addVideoRules();addHostMap();wireConnectionMode();applyHostVisibility()}}
 document.querySelectorAll('[data-screen]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.screen)));
 const saved=JSON.parse(localStorage.getItem('hunt-demo')||'null');
 if(saved){document.getElementById('area').value=saved.area;}

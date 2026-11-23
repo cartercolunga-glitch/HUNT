@@ -6,7 +6,7 @@
     .you-marker-ring{stroke:#ffffff!important;stroke-width:3!important;fill:none!important;opacity:.95;filter:drop-shadow(0 0 5px #ffffffaa)}
     .map-fullscreen{position:fixed!important;inset:0!important;z-index:30;background:#071018f7!important;padding:20px 18px 100px!important;overflow:auto;border-radius:0!important;margin:0!important;max-width:none!important}
     .map-fullscreen #hostMap{height:calc(100vh - 250px)!important;min-height:360px}
-    .map-close{display:none;position:absolute;right:18px;top:18px;z-index:3}
+    .map-close{display:none;position:absolute;right:18px;top:18px;z-index:3;background:#101b27ee!important;border:1px solid #426176!important;border-radius:14px!important;color:#f5f7fa!important;box-shadow:0 10px 24px #0008,0 0 0 1px #07101866!important;padding:12px 16px!important;font-weight:800!important;backdrop-filter:blur(10px)}
     .map-fullscreen .map-close{display:block}
     .ready-action{width:100%;margin-top:12px}.gameactions{display:grid;grid-template-columns:1fr;width:100%;margin:12px 0}.gameactions .mini{width:100%;min-height:82px}
     .mode-description{display:block;color:var(--muted);font-size:11px;line-height:1.35;margin-top:6px}

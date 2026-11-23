@@ -129,8 +129,8 @@ addFeatureGuide();addModeAndSafety();addSafetyCard();addQuickStats();addNav();ad
 const baseShow=show;show=function(id){baseShow(id);addLobbyTools();addGameControls();if(id==='lobby'){addConnectivityCard();addVideoRules();wireConnectionMode();setTimeout(()=>ensureHostMap(),100)}document.querySelectorAll('.navitem').forEach(x=>x.classList.toggle('active',x.dataset.nav===id))};
 // When served by server.js, switch the demo controls to shared online game state.
 if(location.protocol.startsWith('http')){
-  function readHuntSession(key){try{return localStorage.getItem(key)||sessionStorage.getItem(key)}catch(_){return sessionStorage.getItem(key)}} 
-  function saveHuntSession(code,player){try{localStorage.setItem('hunt-code',code);localStorage.setItem('hunt-player',player)}catch(_){}sessionStorage.setItem('hunt-code',code);sessionStorage.setItem('hunt-player',player)}
+  function readHuntSession(key){try{const stored=localStorage.getItem(key)||sessionStorage.getItem(key);if(stored)return stored}catch(_){}const match=document.cookie.match(new RegExp('(?:^|; )'+key+'=([^;]*)'));return match?decodeURIComponent(match[1]):''}
+  function saveHuntSession(code,player){try{localStorage.setItem('hunt-code',code);localStorage.setItem('hunt-player',player)}catch(_){}sessionStorage.setItem('hunt-code',code);sessionStorage.setItem('hunt-player',player);document.cookie='hunt-code='+encodeURIComponent(code)+'; Path=/; Max-Age=604800; SameSite=Lax';document.cookie='hunt-player='+encodeURIComponent(player)+'; Path=/; Max-Age=604800; SameSite=Lax'}
     let onlineCode=readHuntSession('hunt-code');let onlinePlayer=readHuntSession('hunt-player');let onlineHostId=null;let poller;let realtime;let syncFailures=0;
   const api=async(path,options={})=>{const r=await fetch(path,{headers:{'Content-Type':'application/json'},...options});const data=await r.json();if(!r.ok)throw new Error(data.error||'Request failed');return data};
   window.huntSendChat=async text=>{if(!onlineCode||!onlinePlayer)return;try{const r=await api('/api/games/'+onlineCode+'/chat',{method:'POST',body:JSON.stringify({playerId:onlinePlayer,text})});paintOnline(r.game)}catch(e){toast(e.message)}};

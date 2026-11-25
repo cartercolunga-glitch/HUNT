@@ -82,7 +82,17 @@ function safe(game,viewerId){
   const photosEnabled=rules.photoIdentification!==false;
   const players=game.players.map(p=>{const copy={...p};delete copy.photo;delete copy.targetId;if(p.id===viewerId&&p.photo)copy.photo=p.photo;if(game.mode==='Senior Assassin'&&p.id===viewerId&&p.targetId){copy.targetId=p.targetId;copy.targetName=game.players.find(x=>x.id===p.targetId)?.name||null}const opposing=(viewer?.role==='HUNTER'&&p.role==='RUNNER')||(viewer?.role==='RUNNER'&&p.role==='HUNTER')||(game.mode==='Senior Assassin'&&viewer?.targetId===p.id)||caught;if(live&&photosEnabled&&viewer&&viewerId!==p.id&&p.photo&&opposing)copy.photo=p.photo;copy.hasPhoto=!!p.photo;return copy});
   const pingSnapshot=game.mode==='Senior Assassin'&&viewerId?Object.fromEntries(Object.entries(game.pingSnapshot||{}).filter(([pid])=>pid===viewerId).map(([pid,point])=>[pid,locationFor(game,point)]).filter(([,point])=>point)):hunter?Object.fromEntries(Object.entries(game.pingSnapshot||{}).map(([pid,point])=>[pid,locationFor(game,point)]).filter(([,point])=>point)):{};
-  return {...game,rules,players,locations:visible,pingSnapshot,nextPingSeconds:game.status==='live'?game.nextPingSeconds:null,result:game.result||null};
+  return {...game,rules,players,locations:visible,pingSnapshot,nextPingSeconds:game.status==='live'?game.nextPingSeconds:null,result:game.result||null,rematch:game.rematch?{code:game.rematch.code,playerId:game.rematch.map?.[viewerId]||null}:null};
+}
+function createRematch(game){
+  let nextCode=code();while(games.has(nextCode))nextCode=code();
+  const oldPlayers=game.players.map(p=>({...p}));
+  const players=oldPlayers.map(p=>({id:id(),name:p.name,role:'UNASSIGNED',ready:false,status:'waiting',locationShared:false,photo:p.photo||null}));
+  const hostIndex=Math.max(0,oldPlayers.findIndex(p=>p.id===game.hostId));
+  const next={code:nextCode,name:game.name,area:game.area,duration:game.duration,mode:game.mode,status:'lobby',pingWave:0,createdAt:Date.now(),startedAt:null,players,hostId:players[hostIndex].id,zone:JSON.parse(JSON.stringify(game.zone||{type:'circle',radius:500})),rules:{...game.rules,hunterIds:[]},messages:[],locations:{},pingSnapshot:{},result:null};
+  game.rematch={code:nextCode,map:Object.fromEntries(oldPlayers.map((p,i)=>[p.id,players[i].id]))};
+  games.set(nextCode,next);
+  return next;
 }
 function getGame(req){const parts=new URL(req.url,'http://localhost').pathname.split('/').filter(Boolean);return games.get(parts[2]?.toUpperCase())}
 
@@ -100,10 +110,10 @@ const server=http.createServer(async (req,res)=>{
       const game=getGame(req);if(!game)return send(res,404,{error:'Game not found'});if(game.status!=='lobby')return send(res,409,{error:'This game has already started'});if(game.players.length>=game.rules.maxPlayers)return send(res,409,{error:'This game is full'});const b=await body(req);const player={id:id(),name:b.name||'Player',role:'UNASSIGNED',ready:false,status:'waiting',locationShared:false};game.players.push(player);saveGames();broadcast(game);return send(res,201,{game:safe(game,player.id),playerId:player.id})
     }
     if(url.pathname.match(/^\/api\/games\/[^/]+$/)&&req.method==='GET'){const game=getGame(req);return game?send(res,200,{game:safe(game,url.searchParams.get('playerId'))}):send(res,404,{error:'Game not found'})}
-    const action=url.pathname.match(/^\/api\/games\/([^/]+)\/(start|ready|ping|tag|thaw|stop|leave|location|photo|chat|zone|config)$/);
+    const action=url.pathname.match(/^\/api\/games\/([^/]+)\/(start|ready|ping|tag|thaw|stop|leave|location|photo|chat|zone|config|rematch)$/);
     if(action&&req.method==='POST'){
       const game=getGame(req);if(!game)return send(res,404,{error:'Game not found'});const b=await body(req);
-      if(['start','ping','stop','leave','zone','config'].includes(action[2])&&b.hostId!==game.hostId)return send(res,403,{error:'Only the host can control this game'});
+      if(['start','ping','stop','leave','zone','config','rematch'].includes(action[2])&&b.hostId!==game.hostId)return send(res,403,{error:'Only the host can control this game'});
       if(action[2]==='ready'){const p=game.players.find(x=>x.id===b.playerId);if(!p)return send(res,404,{error:'Player not found'});p.ready=b.ready!==false;p.status=p.ready?'ready':'waiting'}
       if(action[2]==='start'){if(game.players.length<2)return send(res,409,{error:'At least two players are required'});if(!game.players.every(p=>p.ready))return send(res,409,{error:'Everyone must tap Ready first'});const hunterCount=Math.max(1,Math.min(game.players.length-1,Number(game.rules.hunterCount)||1));let chosen=[];if(game.rules.hunterSelection==='admin'){chosen=(Array.isArray(game.rules.hunterIds)?game.rules.hunterIds:[]).filter(id=>game.players.some(p=>p.id===id));if(chosen.length!==hunterCount)return send(res,409,{error:`Select exactly ${hunterCount} hunter${hunterCount===1?'':'s'} before starting`})}else{chosen=[...game.players].sort(()=>Math.random()-0.5).slice(0,hunterCount).map(p=>p.id)}game.players.forEach(p=>{p.role=chosen.includes(p.id)?'HUNTER':'RUNNER'});if(game.mode==='Senior Assassin'){game.players.forEach(p=>p.role='ASSASSIN');assignAssassinTargets(game)}game.status='starting';game.startedAt=null;const headStart=secondsFrom(game.rules.headStart);game.headStartSeconds=headStart;game.launchDelayMs=5000+Math.floor(Math.random()*5001);game.launchAt=Date.now()+game.launchDelayMs;game.headStartEndsAt=game.launchAt+headStart*1000;game.startingRemaining=Math.ceil(game.launchDelayMs/1000);game.headStartRemaining=headStart;game.launchImage='hunt-loading-'+Math.floor(Math.random()*9)+'.jpg';game.remainingSeconds=secondsFrom(game.duration);game.lastPingAt=null}
       if(action[2]==='ping'){if(game.mode==='Blackout')return send(res,409,{error:'Blackout has no scheduled or manual ping waves'});emitPing(game)}
@@ -114,6 +124,7 @@ const server=http.createServer(async (req,res)=>{
       if(action[2]==='chat'&&b.playerId&&b.text){const p=game.players.find(x=>x.id===b.playerId);game.messages.push({id:id(),playerId:b.playerId,name:p?.name||'Player',text:String(b.text).slice(0,240),createdAt:Date.now()});game.messages=game.messages.slice(-100)}
       if(action[2]==='zone'&&b.zone)game.zone=b.zone;
       if(action[2]==='config'){if(b.hostId!==game.hostId)return send(res,403,{error:'Only the host can change settings'});if(b.duration)game.duration=String(b.duration);if(b.mode)game.mode=String(b.mode);const allowed=['tagRange','headStart','pingInterval','autoPing','pingSound','requireLocationSharing','runnerMap','maxPlayers','hunterCount','hunterSelection','hunterIds','locationPrecision','locationMode','photoIdentification','connectionMode','seekerMethod','caughtBehavior','playerRole','scheduleStart','chatEnabled','autoEnd','thawDuration','thawRadius','allFrozenWins','closingStages','zoneWarning','shrinkDuration','outsideGrace','blackoutScanCooldown','clueDuration','assassinFormat','assassinSystem','assassinWinCondition'];for(const key of allowed)if(b[key]!==undefined)game.rules[key]=key==='maxPlayers'?Math.max(game.players.length,Math.min(100,Number(b[key]))):key==='hunterCount'?Math.max(1,Math.min(50,Number(b[key]))):key==='hunterIds'?Array.isArray(b[key])?b[key].filter(id=>game.players.some(p=>p.id===id)):[]:b[key];game.rules.locationMode='exact';game.rules.locationPrecision='Exact location'}
+      if(action[2]==='rematch'){if(game.status!=='complete')return send(res,409,{error:'The previous game is not complete'});const next=createRematch(game);saveGames();broadcast(game);return send(res,200,{game:safe(next,next.hostId),playerId:next.hostId})}
       if(action[2]==='stop'){finishGame(game,b.reason==='safety'?'safety':'host');saveGames();broadcast(game);return send(res,200,{game:safe(game,b.playerId||b.hostId)})}
       if(action[2]==='leave'){
         if(b.playerId===game.hostId){

@@ -77,7 +77,7 @@
     if(!btn){btn=document.createElement('button');btn.id='readyBtn';btn.className='btn ready-action';btn.textContent='Tap Ready';start.before(btn)}
     if(btn.dataset.wired==='true')return;
     btn.dataset.wired='true';
-    btn.onclick=async()=>{unlockAudio();btn.disabled=true;try{const me=latest?.players.find(p=>p.id===player());if(!me)throw Error('Player session not found');const next=!me.ready;const d=await api('/api/games/'+code()+'/ready',{method:'POST',body:JSON.stringify({playerId:player(),ready:next})});render(d.game)}catch(e){btn.disabled=false;window.toast?.(e.message)}};
+    btn.onclick=async()=>{unlockAudio();btn.disabled=true;try{const me=latest?.players.find(p=>p.id===player());if(!me)throw Error('Player session not found');const next=!me.ready;if(next)window.huntResumeLocation?.();const d=await api('/api/games/'+code()+'/ready',{method:'POST',body:JSON.stringify({playerId:player(),ready:next})});render(d.game)}catch(e){btn.disabled=false;window.toast?.(e.message)}};
   }
   function wireAdminMode(isHost){
     const mode=document.querySelector('#adminMode');if(!mode||!isHost||mode.dataset.onlineWired==='true')return;
@@ -126,7 +126,7 @@
   window.huntApplyRematch=data=>{
     const next=data?.game?.code,nextPlayer=data?.playerId;
     if(!next||!nextPlayer)return;
-    try{sessionStorage.setItem('hunt-code',next);sessionStorage.setItem('hunt-player',nextPlayer);localStorage.setItem('hunt-code',next);localStorage.setItem('hunt-player',nextPlayer)}catch(_){}
+    try{sessionStorage.setItem('hunt-code',next);sessionStorage.setItem('hunt-player',nextPlayer);localStorage.setItem('hunt-code',next);localStorage.setItem('hunt-player',nextPlayer);onlineCode=next;onlinePlayer=nextPlayer;onlineHostId=data.game.hostId}catch(_){}
     try{realtime?.close()}catch(_){}
     latest=null;liveMap?.remove?.();liveMap=null;liveLayer=null;liveBoundary=null;liveZoneKey='';liveMapHasFitted=false;liveMapUserMoved=false;
     document.querySelector('#results')?.classList.add('hidden');

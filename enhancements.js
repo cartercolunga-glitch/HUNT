@@ -19,7 +19,7 @@
     @media (max-width:700px){.photo-bg{background-position:74% 0!important;background-size:auto 112%!important;filter:saturate(1.2) contrast(1.04) brightness(1.72)!important}.map-fullscreen{padding:16px 12px calc(90px + env(safe-area-inset-bottom))!important}.map-fullscreen #hostMap{height:calc(100vh - 220px)!important;min-height:320px}}
   `;
   document.head.append(style);
-  let latest=null, latestSyncedAt=0, mapWired=false, lastArea='', liveMap=null, liveLayer=null, liveBoundary=null, liveZoneKey='', lastPing=-1, seenPing=-1, timerHandle=null, boundaryWarning=false;
+  let latest=null, latestSyncedAt=0, mapWired=false, lastArea='', liveMap=null, liveLayer=null, liveBoundary=null, liveZoneKey='', liveMapHasFitted=false, liveMapUserMoved=false, lastPing=-1, seenPing=-1, timerHandle=null, boundaryWarning=false;
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const code=()=>sessionStorage.getItem('hunt-code');
   const player=()=>sessionStorage.getItem('hunt-player');
@@ -62,12 +62,12 @@
     if(!mapEl){mapEl=document.createElement('div');mapEl.id='liveSharedMap';mapEl.className=hunter?'hunter-live-map':'shared-live-map';mapEl.innerHTML=hunter?'<div class="ping-label">HUNTER MAP · PING MEMORY</div><div class="waiting-ping">WAITING FOR THE FIRST PING</div>':'<div class="map-label">RUNNER MAP · LIVE CREW</div>';if(old)old.replaceWith(mapEl);else game.querySelector('.notice')?.before(mapEl)}
     mapEl.className=hunter?'hunter-live-map':'shared-live-map';
     const center=zoneCenter(g.zone)||[40.2338,-111.6585];
-    if(window.L&&!liveMap){liveMap=L.map(mapEl,{zoomControl:true}).setView(center,15);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(liveMap);liveLayer=L.layerGroup().addTo(liveMap)}
+    if(window.L&&!liveMap){liveMap=L.map(mapEl,{zoomControl:true}).setView(center,15);liveMap.on('zoomstart dragstart',()=>{liveMapUserMoved=true});L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(liveMap);liveLayer=L.layerGroup().addTo(liveMap)}
     const zoneKey=JSON.stringify(g.zone||{});if(liveMap&&zoneKey!==liveZoneKey){liveZoneKey=zoneKey;drawLiveBoundary(g.zone);if(!g.zone?.points?.length&&!g.zone?.center)liveMap.setView(center,15)}
     const byId=Object.fromEntries(g.players.map(p=>[p.id,p]));
     const points=hunter?{...Object.fromEntries(Object.entries(g.locations||{}).filter(([id])=>byId[id]?.role==='HUNTER')),...(g.pingSnapshot||{}),...(g.locations?.[me.id]?{[me.id]:g.locations[me.id]}:{})}:g.locations||{};
     const entries=Object.entries(points);const waiting=mapEl.querySelector('.waiting-ping');if(waiting)waiting.style.display=entries.length>1?'none':'grid';
-    if(liveLayer){liveLayer.clearLayers();entries.forEach(([id,p])=>{const person=byId[id];const color=person?.status==='tagged'?'#ff3b30':person?.role==='HUNTER'?'#ff9f43':'#38a8ff';L.circleMarker([p.latitude,p.longitude],{radius:10,color,fillColor:color,fillOpacity:.95,weight:3}).bindTooltip(person?.status==='tagged'?'Caught runner':person?.name||'Player').addTo(liveLayer)});if(!liveBoundary&&entries.length)liveMap.fitBounds(entries.map(([,p])=>[p.latitude,p.longitude]),{padding:[35,35],maxZoom:16})}
+    if(liveLayer){liveLayer.clearLayers();entries.forEach(([id,p])=>{const person=byId[id];const color=person?.status==='tagged'?'#ff3b30':person?.role==='HUNTER'?'#ff9f43':'#38a8ff';L.circleMarker([p.latitude,p.longitude],{radius:10,color,fillColor:color,fillOpacity:.95,weight:3}).bindTooltip(person?.status==='tagged'?'Caught runner':person?.name||'Player').addTo(liveLayer)});if(!liveBoundary&&!liveMapHasFitted&&!liveMapUserMoved&&entries.length){liveMap.fitBounds(entries.map(([,p])=>[p.latitude,p.longitude]),{padding:[35,35],maxZoom:16});liveMapHasFitted=true}}
     setTimeout(()=>liveMap?.invalidateSize(),80);
   }
   function wireReady(){
@@ -78,6 +78,11 @@
     if(btn.dataset.wired==='true')return;
     btn.dataset.wired='true';
     btn.onclick=async()=>{unlockAudio();btn.disabled=true;try{const me=latest?.players.find(p=>p.id===player());if(!me)throw Error('Player session not found');const next=!me.ready;const d=await api('/api/games/'+code()+'/ready',{method:'POST',body:JSON.stringify({playerId:player(),ready:next})});render(d.game)}catch(e){btn.disabled=false;window.toast?.(e.message)}};
+  }
+  function wireAdminMode(isHost){
+    const mode=document.querySelector('#adminMode');if(!mode||!isHost||mode.dataset.onlineWired==='true')return;
+    mode.dataset.onlineWired='true';
+    mode.addEventListener('change',async()=>{try{const d=await api('/api/games/'+code()+'/config',{method:'POST',body:JSON.stringify({hostId:player(),mode:mode.value})});render(d.game);window.toast?.('Game mode saved')}catch(e){window.toast?.(e.message)}});
   }
   function wireMap(){
     const map=document.querySelector('#hostMap'),card=document.querySelector('#mapCard');if(!map||!card||mapWired)return;mapWired=true;
@@ -103,7 +108,7 @@
     }
   }
   function render(g){
-    latest=g;if(g.status==='closed'){try{realtime?.close()}catch(_){}sessionStorage.removeItem('hunt-code');sessionStorage.removeItem('hunt-player');onlineCode=null;onlinePlayer=null;show('home');window.toast?.('The host ended the game');return}wireReady();wireModeDescriptions();const id=player(),isHost=id===g.hostId,allReady=g.players.length>=2&&g.players.every(p=>p.ready);
+    latest=g;if(g.status==='closed'){try{realtime?.close()}catch(_){}sessionStorage.removeItem('hunt-code');sessionStorage.removeItem('hunt-player');onlineCode=null;onlinePlayer=null;show('home');window.toast?.('The host ended the game');return}wireReady();wireModeDescriptions();const id=player(),isHost=id===g.hostId,allReady=g.players.length>=2&&g.players.every(p=>p.ready);wireAdminMode(isHost);
     const list=document.querySelector('.players');if(list)list.innerHTML=g.players.map(p=>'<div class="player"><div>'+esc(p.name)+'<small>'+(p.ready?'ready':'waiting')+' · location '+(p.locationShared?'on':'off')+'</small></div><span class="role">'+(p.role==='UNASSIGNED'?'WAITING':esc(p.role))+'</span></div>').join('');
     ['adminCard','mapCard','videoRules','toolbar'].forEach(id=>{const el=document.getElementById(id)||document.querySelector('.'+id);if(el)el.style.display=isHost?'block':'none'});
     const start=document.querySelector('#startBtn');if(start){start.style.display=isHost&&g.status==='lobby'?'block':'none';start.disabled=!allReady;start.textContent=allReady?'Start game':'Waiting for Ready';}

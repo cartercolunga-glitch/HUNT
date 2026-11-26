@@ -87,6 +87,12 @@ function safe(game,viewerId){
   return {...game,rules,players,locations:visible,pingSnapshot,nextPingSeconds:game.status==='live'?game.nextPingSeconds:null,result:game.result||null,rematch:game.rematch?{code:game.rematch.code,playerId:game.rematch.map?.[viewerId]||null}:null};
 }
 function createRematch(game){
+  // Rematch creation is idempotent: repeated clicks or restored sessions reuse
+  // the already-created fresh lobby instead of trying to start the finished game.
+  if(game.rematch?.code){
+    const existing=games.get(game.rematch.code);
+    if(existing&&existing.status==='lobby')return existing;
+  }
   let nextCode=code();while(games.has(nextCode))nextCode=code();
   const oldPlayers=game.players.map(p=>({...p}));
   const players=oldPlayers.map(p=>({id:id(),name:p.name,role:'UNASSIGNED',ready:false,status:'waiting',locationShared:p.locationShared===true,photo:p.photo||null}));

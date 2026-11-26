@@ -68,14 +68,14 @@ function safe(game,viewerId){
   const add=(pid,point)=>{const safePoint=locationFor(game,point);if(safePoint)visible[pid]=safePoint};
   if(game.mode==='Blackout'){
     for(const p of game.players)if(p.role==='HUNTER'&&game.locations[p.id])add(p.id,game.locations[p.id]);
-    if(viewer?.role==='RUNNER'&&game.rules.runnerMap!==false)for(const p of game.players)if(p.role==='RUNNER'&&game.locations[p.id])add(p.id,game.locations[p.id]);
+    if(viewer?.role==='RUNNER')for(const p of game.players)if(p.role==='RUNNER'&&game.locations[p.id])add(p.id,game.locations[p.id]);
   } else if(game.mode==='Senior Assassin'){
     if(viewerId&&game.locations[viewerId])add(viewerId,game.locations[viewerId]);
     const target=viewer?.targetId&&game.pingSnapshot?.[viewer.targetId];if(target)add(viewer.targetId,target);
   } else if(hunter)for(const [pid,point] of Object.entries(game.locations))add(pid,point);
   else if(hunterTeam)for(const p of game.players)if(p.role==='HUNTER'&&game.locations[p.id])add(p.id,game.locations[p.id]);
   else if(caught)for(const [pid,point] of Object.entries(game.locations))add(pid,point);
-  else if(viewer?.role==='RUNNER'&&game.status==='live'&&game.rules.runnerMap!==false)for(const p of game.players)if(p.role==='RUNNER'&&game.locations[p.id])add(p.id,game.locations[p.id]);
+  else if(viewer?.role==='RUNNER'&&game.status==='live')for(const p of game.players)if(p.role==='RUNNER'&&game.locations[p.id])add(p.id,game.locations[p.id]);
   else if(viewerId&&game.locations[viewerId])add(viewerId,game.locations[viewerId]);
   const rules={...game.rules};if(viewerId!==game.hostId&&game.status==='lobby')delete rules.hunterIds;
   if(game.mode==='Blackout')rules.autoPing=false;

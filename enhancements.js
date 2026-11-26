@@ -122,6 +122,16 @@
     latestSyncedAt=Date.now();updateTimer();
     if(!timerHandle)timerHandle=setInterval(updateTimer,1000);
   }
+  window.huntGetSession=()=>({code:code(),player:player()});
+  window.huntApplyRematch=data=>{
+    const next=data?.game?.code,nextPlayer=data?.playerId;
+    if(!next||!nextPlayer)return;
+    try{sessionStorage.setItem('hunt-code',next);sessionStorage.setItem('hunt-player',nextPlayer);localStorage.setItem('hunt-code',next);localStorage.setItem('hunt-player',nextPlayer)}catch(_){}
+    try{realtime?.close()}catch(_){}
+    latest=null;liveMap?.remove?.();liveMap=null;liveLayer=null;liveBoundary=null;liveZoneKey='';liveMapHasFitted=false;liveMapUserMoved=false;
+    document.querySelector('#results')?.classList.add('hidden');
+    render(data.game);show('lobby');sync();
+  };
   function adoptRematch(g){const oldPlayer=player(),wasSharing=g?.players?.find(p=>p.id===oldPlayer)?.locationShared===true;const next=g?.rematch?.code,nextPlayer=g?.rematch?.playerId;if(!next||!nextPlayer||code()===next&&player()===nextPlayer)return false;try{localStorage.setItem('hunt-code',next);localStorage.setItem('hunt-player',nextPlayer);sessionStorage.setItem('hunt-code',next);sessionStorage.setItem('hunt-player',nextPlayer);document.cookie='hunt-code='+encodeURIComponent(next)+'; Path=/; Max-Age=604800; SameSite=Lax';document.cookie='hunt-player='+encodeURIComponent(nextPlayer)+'; Path=/; Max-Age=604800; SameSite=Lax'}catch(_){};try{liveMap?.remove?.()}catch(_){}liveMap=null;liveLayer=null;liveBoundary=null;liveZoneKey='';liveMapHasFitted=false;liveMapUserMoved=false;show('lobby');if(wasSharing)setTimeout(()=>window.huntResumeLocation?.(),0);return true}
   async function sync(){const c=code();if(!c)return;try{const d=await api('/api/games/'+c+'?playerId='+encodeURIComponent(player()||''));if(adoptRematch(d.game))return;render(d.game)}catch(_){} }
   document.addEventListener('click',async e=>{const leave=e.target.closest?.('#lobby .back');if(!leave||!onlineCode||!onlinePlayer)return;e.preventDefault();e.stopImmediatePropagation();try{const d=await api('/api/games/'+onlineCode+'/leave',{method:'POST',body:JSON.stringify({hostId:onlineHostId,playerId:onlinePlayer})});if(d.game?.status==='closed')window.toast?.('Game closed for everyone');}catch(_){}try{realtime?.close()}catch(_){}sessionStorage.removeItem('hunt-code');sessionStorage.removeItem('hunt-player');onlineCode=null;onlinePlayer=null;show('home')},true);

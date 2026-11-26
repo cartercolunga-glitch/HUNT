@@ -87,7 +87,7 @@ function safe(game,viewerId){
 function createRematch(game){
   let nextCode=code();while(games.has(nextCode))nextCode=code();
   const oldPlayers=game.players.map(p=>({...p}));
-  const players=oldPlayers.map(p=>({id:id(),name:p.name,role:'UNASSIGNED',ready:false,status:'waiting',locationShared:false,photo:p.photo||null}));
+  const players=oldPlayers.map(p=>({id:id(),name:p.name,role:'UNASSIGNED',ready:false,status:'waiting',locationShared:p.locationShared===true,photo:p.photo||null}));
   const hostIndex=Math.max(0,oldPlayers.findIndex(p=>p.id===game.hostId));
   const next={code:nextCode,name:game.name,area:game.area,duration:game.duration,mode:game.mode,status:'lobby',pingWave:0,createdAt:Date.now(),startedAt:null,players,hostId:players[hostIndex].id,zone:JSON.parse(JSON.stringify(game.zone||{type:'circle',radius:500})),rules:{...game.rules,hunterIds:[]},messages:[],locations:{},pingSnapshot:{},result:null};
   game.rematch={code:nextCode,map:Object.fromEntries(oldPlayers.map((p,i)=>[p.id,players[i].id]))};
